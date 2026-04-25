@@ -1,0 +1,32 @@
+# AssetTrack .gitignore
+
+# ── Configuratie (bevat wachtwoorden!) ──────────────────────────
+includes/config.php
+
+# ── Uploads (gebruikersbestanden) ───────────────────────────────
+assets/uploads/
+assets/downloads/
+
+# ── Logs ────────────────────────────────────────────────────────
+*.log
+error_log
+
+# ── OS bestanden ─────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── IDE bestanden ────────────────────────────────────────────────
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# ── Node (als je ooit tooling toevoegt) ─────────────────────────
+node_modules/
+npm-debug.log
+
+# ── Tijdelijke bestanden ─────────────────────────────────────────
+*.tmp
+*.bak
+*.swp
