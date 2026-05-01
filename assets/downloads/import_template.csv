@@ -1,0 +1,3 @@
+Assetnummer;Merk;Model;Soort;Ruimte;Serienummer;Status;In gebruik bij;Aankoopdatum;Garantie tot;Afschrijving jaren;MAC adres;LAN IP;Besturingssysteem;RAM;CPU;Opmerking
+AT-00001;Dell;OptiPlex 7090;Desktop;Kantoor 1;1A2B3C4D5E6F;In gebruik;Jan Jansen;15-01-2022;15-01-2024;5;00:11:22:33:44:55;192.168.1.100;Windows 10 Pro;16GB;Intel i7;Werkstation Jan
+AT-00002;HP;ProBook 450;Laptop;Kantoor 2;9Z8Y7X6W5V4U;Beschikbaar;Maria Garcia;20-03-2021;20-03-2024;5;AA:BB:CC:DD:EE:FF;192.168.1.101;Windows 11 Pro;8GB;Intel i5;Reserve laptop
