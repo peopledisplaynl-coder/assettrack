@@ -315,6 +315,42 @@ footer {
         <p>Selecteer de locatie waarvoor je <?= htmlspecialchars($appName) ?> wil gebruiken.</p>
     </div>
 
+    <?php
+    // Haal unieke organisaties op via org_name uit de locaties
+    $orgNames = [];
+    foreach ($locations as $loc) {
+        $on = $loc['org_name'] ?? '';
+        if ($on && !in_array($on, $orgNames)) $orgNames[] = $on;
+    }
+    $filterOrgName = trim($_GET['org'] ?? '');
+    $multiOrg = count($orgNames) > 1;
+    ?>
+
+    <?php if ($multiOrg): ?>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-bottom:28px;">
+        <a href="<?= BASE_URL ?>/select_location.php"
+           style="display:inline-flex;align-items:center;padding:8px 20px;border-radius:999px;
+                  font-size:0.875rem;font-weight:700;text-decoration:none;transition:all 0.15s;
+                  background:<?= !$filterOrgName ? $themePrimary : 'white' ?>;
+                  color:<?= !$filterOrgName ? 'white' : '#374151' ?>;
+                  border:2px solid <?= !$filterOrgName ? $themePrimary : '#d1d5db' ?>;
+                  box-shadow:<?= !$filterOrgName ? '0 2px 8px rgba(0,0,0,0.15)' : 'none' ?>;">
+            Alle organisaties
+        </a>
+        <?php foreach ($orgNames as $on): ?>
+        <a href="?org=<?= urlencode($on) ?>"
+           style="display:inline-flex;align-items:center;padding:8px 20px;border-radius:999px;
+                  font-size:0.875rem;font-weight:700;text-decoration:none;transition:all 0.15s;
+                  background:<?= $filterOrgName===$on ? $themePrimary : 'white' ?>;
+                  color:<?= $filterOrgName===$on ? 'white' : '#374151' ?>;
+                  border:2px solid <?= $filterOrgName===$on ? $themePrimary : '#d1d5db' ?>;
+                  box-shadow:<?= $filterOrgName===$on ? '0 2px 8px rgba(0,0,0,0.15)' : 'none' ?>;">
+            <?= htmlspecialchars($on) ?>
+        </a>
+        <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
+
     <?php if ($error): ?>
     <div style="background:#fee2e2;color:#991b1b;border:1px solid #fecaca;border-radius:10px;
                 padding:12px 20px;margin-bottom:20px;font-size:0.875rem;">
@@ -323,7 +359,17 @@ footer {
     <?php endif; ?>
 
     <div class="location-grid">
-        <?php foreach ($locations as $loc):
+        <?php
+        $visibleLocations = $filterOrgName
+            ? array_filter($locations, fn($l) => ($l['org_name'] ?? '') === $filterOrgName)
+            : $locations;
+        ?>
+        <?php if (empty($visibleLocations)): ?>
+        <div style="text-align:center;padding:40px;color:#64748b;grid-column:1/-1;">
+            Geen locaties gevonden voor deze organisatie.
+        </div>
+        <?php endif; ?>
+        <?php foreach ($visibleLocations as $loc):
             $ld        = $locationData[$loc['id']] ?? [];
             $locColor  = $ld['theme_color'] ?? $themePrimary;
             $locHeader = $ld['theme_color'] ? darkenHex($ld['theme_color'], 20) : $themeSecondary;
