@@ -80,7 +80,21 @@ $filters = [
     'room'   => $_GET['room'] ?? '',
 ];
 
-$assets = searchAssets($search, array_filter($filters), 100, 0);
+// Paginering
+$perPage     = (int)($_GET['per_page'] ?? 50);
+$validPerPage = [25, 50, 100, 250, 500];
+if (!in_array($perPage, $validPerPage)) $perPage = 50;
+$currentPage = max(1, (int)($_GET['page'] ?? 1));
+$offset      = ($currentPage - 1) * $perPage;
+
+// Totaal aantal voor paginering (zonder limit)
+$totalAssets = searchAssets($search, array_filter($filters), 99999, 0);
+$totalCount  = count($totalAssets);
+$totalPages  = max(1, (int)ceil($totalCount / $perPage));
+$currentPage = min($currentPage, $totalPages);
+$offset      = ($currentPage - 1) * $perPage;
+
+$assets = searchAssets($search, array_filter($filters), $perPage, $offset);
 
 foreach ($assets as &$asset) {
     $asset = calculateAssetFields($asset);
@@ -337,7 +351,75 @@ include __DIR__ . '/../../templates/header.php';
         <?php endif; ?>
     </div>
 
-    <p style="margin-top:12px;color:#6b7280;font-size:0.85rem;"><?= count($assets) ?> asset(s) gevonden</p>
+    <!-- Paginering -->
+    <div style="display:flex;align-items:center;justify-content:space-between;
+                margin-top:14px;flex-wrap:wrap;gap:10px;">
+
+        <!-- Teller + per pagina -->
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <span style="color:#6b7280;font-size:0.85rem;">
+                <?= $totalCount ?> asset(s) — pagina <?= $currentPage ?> van <?= $totalPages ?>
+            </span>
+            <div style="display:flex;align-items:center;gap:6px;">
+                <label style="font-size:0.82rem;color:#6b7280;">Per pagina:</label>
+                <select class="form-control" style="width:80px;padding:4px 8px;"
+                        onchange="changePerPage(this.value)">
+                    <?php foreach ([25,50,100,250,500] as $pp): ?>
+                    <option value="<?= $pp ?>" <?= $pp===$perPage?'selected':'' ?>><?= $pp ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <script>
+            function changePerPage(val) {
+                var url = new URL(window.location.href);
+                url.searchParams.set('per_page', val);
+                url.searchParams.set('page', '1');
+                window.location.href = url.toString();
+            }
+            </script>
+        </div>
+
+        <!-- Pagina knoppen -->
+        <?php if ($totalPages > 1): ?>
+        <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">
+            <?php
+            // Bouw query string
+            $qp = array_filter($filters);
+            if ($search) $qp['search'] = $search;
+            $qp['per_page'] = $perPage;
+            function pageUrl(array $qp, int $page): string {
+                $qp['page'] = $page;
+                return '?' . http_build_query($qp);
+            }
+            ?>
+            <!-- Vorige -->
+            <?php if ($currentPage > 1): ?>
+            <a href="<?= pageUrl($qp, $currentPage-1) ?>"
+               class="btn btn-sm btn-secondary">← Vorige</a>
+            <?php endif; ?>
+
+            <!-- Pagina nummers -->
+            <?php
+            $start = max(1, $currentPage - 2);
+            $end   = min($totalPages, $currentPage + 2);
+            if ($start > 1): ?><a href="<?= pageUrl($qp,1) ?>" class="btn btn-sm btn-secondary">1</a><?php endif;
+            if ($start > 2): ?><span style="padding:0 4px;color:#94a3b8;">…</span><?php endif;
+            for ($p = $start; $p <= $end; $p++):
+            ?><a href="<?= pageUrl($qp,$p) ?>"
+                 class="btn btn-sm <?= $p===$currentPage?'btn-primary':'btn-secondary' ?>"><?= $p ?></a><?php
+            endfor;
+            if ($end < $totalPages-1): ?><span style="padding:0 4px;color:#94a3b8;">…</span><?php endif;
+            if ($end < $totalPages): ?><a href="<?= pageUrl($qp,$totalPages) ?>" class="btn btn-sm btn-secondary"><?= $totalPages ?></a><?php endif;
+            ?>
+
+            <!-- Volgende -->
+            <?php if ($currentPage < $totalPages): ?>
+            <a href="<?= pageUrl($qp, $currentPage+1) ?>"
+               class="btn btn-sm btn-secondary">Volgende →</a>
+            <?php endif; ?>
+        </div>
+        <?php endif; ?>
+    </div>
 
 </form>
 
