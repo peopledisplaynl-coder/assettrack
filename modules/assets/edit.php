@@ -33,6 +33,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $oldValues = $asset;
 
+    // Assetnummer — controleer op duplicaat
+    $newAssetNumber = trim($_POST['asset_number'] ?? '') ?: $asset['asset_number'];
+    if ($newAssetNumber !== $asset['asset_number']) {
+        $existing = queryOne("SELECT id FROM assets WHERE asset_number = ? AND id != ?",
+                             [$newAssetNumber, $id]);
+        if ($existing) $errors[] = "Assetnummer '$newAssetNumber' is al in gebruik bij een ander asset.";
+    }
+
     $data = [
         'room'                     => trim($_POST['room'] ?? ''),
         'brand'                    => trim($_POST['brand'] ?? ''),
@@ -79,6 +87,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (empty($errors)) {
         try {
             updateAsset($id, $data);
+            // Assetnummer apart updaten als het gewijzigd is
+            if ($newAssetNumber !== $asset['asset_number']) {
+                execute("UPDATE assets SET asset_number = ? WHERE id = ?", [$newAssetNumber, $id]);
+                $asset['asset_number'] = $newAssetNumber;
+            }
             registerBrandUsage($data['brand']);
             logAudit('UPDATE', 'assets', $id, $oldValues, array_merge($asset, $data));
             $success = 'Asset succesvol bijgewerkt!';
@@ -123,8 +136,18 @@ include __DIR__ . '/../../templates/header.php';
     <div class="card" style="margin-bottom:20px;">
         <div class="card-body">
             <h3 style="margin-top:0;color:#1a2332;border-bottom:1px solid #e5e7eb;padding-bottom:10px;">Algemeen</h3>
-            <div style="margin-bottom:15px;padding:10px;background:#f8fafc;border-radius:6px;">
-                <strong>Assetnummer:</strong> <?= htmlspecialchars($asset['asset_number']) ?>
+            <div class="form-group" style="margin-bottom:15px;">
+                <label>
+                    Assetnummer
+                    <span style="font-size:0.75rem;color:#94a3b8;font-weight:normal;margin-left:6px;">
+                        (aanpassen om te hernoemen)
+                    </span>
+                </label>
+                <input type="text" name="asset_number" class="form-control"
+                       value="<?= htmlspecialchars($asset['asset_number']) ?>"
+                       style="font-weight:700;font-size:1rem;max-width:300px;"
+                       placeholder="bijv. AT-001">
+                <small style="color:#6b7280;">Laat leeg om het huidige nummer te behouden.</small>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:15px;">
                 <div class="form-group">
@@ -425,228 +448,6 @@ function calculateReplacement() {
         field.value = date.toISOString().split('T')[0];
     }
 }
-</script>
-
-<!-- Gekoppelde assets — volledig beheer in edit -->
-<?php
-$editRelations = query(
-    "SELECT ar.*, a.asset_number, a.brand, a.model, a.type, a.status, ar.id as rel_id
-     FROM asset_relations ar
-     JOIN assets a ON ar.related_id = a.id
-     WHERE ar.asset_id = ?
-     ORDER BY ar.relation_type, a.asset_number",
-    [$asset['id']]
-);
-$parentEditRelations = query(
-    "SELECT ar.*, a.asset_number, a.brand, a.model, a.type, ar.id as rel_id
-     FROM asset_relations ar
-     JOIN assets a ON ar.asset_id = a.id
-     WHERE ar.related_id = ?
-     ORDER BY a.asset_number",
-    [$asset['id']]
-);
-$relTypeLabels = [
-    'peripheral'  => ['label' => 'Randapparaat',     'icon' => '🔗'],
-    'child'       => ['label' => 'Onderdeel van',    'icon' => '👶'],
-    'replacement' => ['label' => 'Vervanging van',   'icon' => '🔄'],
-    'network'     => ['label' => 'Netwerkkoppeling', 'icon' => '🌐'],
-];
-?>
-
-<div class="card" style="margin-bottom:20px;">
-    <div class="card-body">
-        <h3 style="margin-top:0;color:#1a2332;border-bottom:1px solid #e5e7eb;padding-bottom:10px;">
-            🔗 Gekoppelde assets
-        </h3>
-
-        <!-- Bestaande koppelingen -->
-        <?php if (!empty($editRelations)): ?>
-        <div style="margin-bottom:15px;">
-            <div style="font-size:0.8rem;color:#6b7280;font-weight:600;text-transform:uppercase;margin-bottom:8px;">
-                Gekoppeld aan dit asset
-            </div>
-            <div style="display:grid;gap:6px;">
-                <?php foreach ($editRelations as $rel): ?>
-                <?php $rt = $relTypeLabels[$rel['relation_type']] ?? ['label'=>$rel['relation_type'],'icon'=>'🔗']; ?>
-                <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;
-                            background:#f8fafc;border-radius:8px;border:1px solid #e5e7eb;">
-                    <span style="font-size:1.1rem;"><?= $rt['icon'] ?></span>
-                    <div style="flex:1;">
-                        <a href="<?= BASE_URL ?>/modules/assets/view.php?id=<?= $rel['related_id'] ?>"
-                           style="font-weight:600;color:#2563eb;text-decoration:none;font-size:0.9rem;">
-                            <?= htmlspecialchars($rel['asset_number']) ?>
-                        </a>
-                        <span style="color:#6b7280;font-size:0.8rem;">
-                            — <?= htmlspecialchars(trim(($rel['brand']??'').' '.($rel['model']??''))) ?>
-                            (<?= htmlspecialchars($rel['type']??'') ?>)
-                        </span>
-                        <?php if ($rel['notes']): ?>
-                        <span style="color:#6b7280;font-size:0.78rem;display:block;">
-                            <?= htmlspecialchars($rel['notes']) ?>
-                        </span>
-                        <?php endif; ?>
-                    </div>
-                    <span style="font-size:0.75rem;background:#e5e7eb;padding:2px 8px;border-radius:4px;">
-                        <?= $rt['label'] ?>
-                    </span>
-                    <form method="POST" action="<?= BASE_URL ?>/modules/assets/relations.php" style="margin:0;">
-                        <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
-                        <input type="hidden" name="action" value="delete">
-                        <input type="hidden" name="relation_id" value="<?= $rel['rel_id'] ?>">
-                        <input type="hidden" name="asset_id" value="<?= $asset['id'] ?>">
-                        <input type="hidden" name="redirect" value="edit">
-                        <button type="submit" onclick="return confirm('Koppeling verwijderen?')"
-                                style="background:none;border:none;color:#ef4444;cursor:pointer;
-                                       font-size:1.1rem;padding:4px;" title="Verwijderen">✕</button>
-                    </form>
-                </div>
-                <?php endforeach; ?>
-            </div>
-        </div>
-        <?php endif; ?>
-
-        <?php if (!empty($parentEditRelations)): ?>
-        <div style="margin-bottom:15px;">
-            <div style="font-size:0.8rem;color:#6b7280;font-weight:600;text-transform:uppercase;margin-bottom:8px;">
-                Dit asset is gekoppeld aan
-            </div>
-            <div style="display:grid;gap:6px;">
-                <?php foreach ($parentEditRelations as $rel): ?>
-                <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;
-                            background:#eff6ff;border-radius:8px;border:1px solid #bfdbfe;">
-                    <span>↑</span>
-                    <div style="flex:1;">
-                        <a href="<?= BASE_URL ?>/modules/assets/edit.php?id=<?= $rel['asset_id'] ?>"
-                           style="font-weight:600;color:#2563eb;text-decoration:none;font-size:0.9rem;">
-                            <?= htmlspecialchars($rel['asset_number']) ?>
-                        </a>
-                        <span style="color:#6b7280;font-size:0.8rem;">
-                            — <?= htmlspecialchars(trim(($rel['brand']??'').' '.($rel['model']??''))) ?>
-                        </span>
-                    </div>
-                </div>
-                <?php endforeach; ?>
-            </div>
-        </div>
-        <?php endif; ?>
-
-        <?php if (empty($editRelations) && empty($parentEditRelations)): ?>
-        <p style="color:#6b7280;font-size:0.875rem;margin-bottom:15px;">
-            Nog geen koppelingen. Voeg hieronder een koppeling toe.
-        </p>
-        <?php endif; ?>
-
-        <!-- Koppeling toevoegen -->
-        <div style="border-top:1px solid #e5e7eb;padding-top:15px;margin-top:5px;">
-            <button type="button" onclick="toggleEditRelationForm()" class="btn btn-secondary">
-                + Koppeling toevoegen
-            </button>
-            <div id="editRelationForm" style="display:none;margin-top:15px;padding:15px;
-                 background:#f8fafc;border-radius:8px;border:1px solid #e5e7eb;">
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-                <div class="form-group" style="margin:0;position:relative;">
-                    <label>Zoek asset</label>
-                    <input type="text" id="editRelationSearch" class="form-control"
-                           placeholder="Assetnummer, merk, model..."
-                           oninput="searchEditRelation(this.value)" autocomplete="off">
-                    <div id="editRelationResults" style="display:none;position:absolute;z-index:200;
-                         background:white;border:1px solid #e5e7eb;border-radius:6px;
-                         max-height:200px;overflow-y:auto;width:100%;
-                         box-shadow:0 4px 10px rgba(0,0,0,0.1);top:100%;left:0;">
-                    </div>
-                    <input type="hidden" id="editRelatedId">
-                    <div id="editSelectedAsset" style="margin-top:4px;font-size:0.8rem;color:#059669;"></div>
-                </div>
-                <div class="form-group" style="margin:0;">
-                    <label>Type koppeling</label>
-                    <select id="editRelationType" class="form-control">
-                        <option value="peripheral">🔗 Randapparaat</option>
-                        <option value="child">👶 Onderdeel van</option>
-                        <option value="replacement">🔄 Vervanging van</option>
-                        <option value="network">🌐 Netwerkkoppeling</option>
-                    </select>
-                </div>
-            </div>
-            <div class="form-group" style="margin:10px 0;">
-                <label>Opmerking (optioneel)</label>
-                <input type="text" id="editRelationNotes" class="form-control"
-                       placeholder="bijv. Linker monitor, Poort 12">
-            </div>
-            <div style="display:flex;gap:10px;margin-top:5px;">
-                <button type="button" onclick="saveEditRelation()" class="btn btn-primary">
-                    🔗 Koppeling opslaan
-                </button>
-                <button type="button" onclick="toggleEditRelationForm()" class="btn btn-secondary">
-                    Annuleren
-                </button>
-            </div>
-            </div><!-- end editRelationForm -->
-        </div>
-    </div>
-</div>
-
-<form id="addRelationForm" method="POST"
-      action="<?= BASE_URL ?>/modules/assets/relations.php" style="display:none;">
-    <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
-    <input type="hidden" name="action" value="add">
-    <input type="hidden" name="asset_id" value="<?= $asset['id'] ?>">
-    <input type="hidden" name="related_id" id="formRelatedId">
-    <input type="hidden" name="relation_type" id="formRelationType">
-    <input type="hidden" name="notes" id="formRelationNotes">
-    <input type="hidden" name="redirect" value="edit">
-</form>
-
-<script>
-let editRelSearchTimeout;
-
-function toggleEditRelationForm() {
-    const form = document.getElementById('editRelationForm');
-    form.style.display = form.style.display === 'none' ? 'block' : 'none';
-}
-
-function searchEditRelation(val) {
-    clearTimeout(editRelSearchTimeout);
-    const box = document.getElementById('editRelationResults');
-    if (val.length < 2) { box.style.display = 'none'; return; }
-
-    editRelSearchTimeout = setTimeout(async () => {
-        const resp = await fetch('<?= BASE_URL ?>/modules/assets/relations.php?search=' +
-            encodeURIComponent(val) + '&exclude=<?= $asset['id'] ?>');
-        const data = await resp.json();
-        if (!data.length) { box.style.display = 'none'; return; }
-        box.innerHTML = data.map(a =>
-            `<div onclick="selectEditRelation(${a.id}, '${a.asset_number.replace(/'/g,"\'")}', '${((a.brand||'')+ ' ' +(a.model||'')).trim().replace(/'/g,"\'")}', '${(a.type||'').replace(/'/g,"\'")}' )"
-                  style="padding:8px 12px;cursor:pointer;border-bottom:1px solid #f3f4f6;font-size:0.875rem;"
-                  onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
-                <strong>${a.asset_number}</strong>
-                <span style="color:#6b7280;"> — ${a.brand||''} ${a.model||''} (${a.type||''})</span>
-            </div>`
-        ).join('');
-        box.style.display = 'block';
-    }, 300);
-}
-
-function selectEditRelation(id, number, name, type) {
-    document.getElementById('editRelatedId').value = id;
-    document.getElementById('editRelationSearch').value = number;
-    document.getElementById('editSelectedAsset').textContent = '✓ ' + number + ' — ' + name;
-    document.getElementById('editRelationResults').style.display = 'none';
-}
-
-function saveEditRelation() {
-    const relatedId = document.getElementById('editRelatedId').value;
-    if (!relatedId) { alert('Selecteer eerst een asset om te koppelen.'); return; }
-    document.getElementById('formRelatedId').value = relatedId;
-    document.getElementById('formRelationType').value = document.getElementById('editRelationType').value;
-    document.getElementById('formRelationNotes').value = document.getElementById('editRelationNotes').value;
-    document.getElementById('addRelationForm').submit();
-}
-
-document.addEventListener('click', function(e) {
-    if (!e.target.closest('#editRelationSearch') && !e.target.closest('#editRelationResults')) {
-        document.getElementById('editRelationResults').style.display = 'none';
-    }
-});
 </script>
 
 <?php include __DIR__ . '/../../templates/footer.php'; ?>
