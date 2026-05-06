@@ -8,14 +8,29 @@ requirePermission('view_reports');
 $type   = $_GET['type']   ?? 'all';
 $export = $_GET['export'] ?? '';
 
+// ── Locatietoegang bepalen ───────────────────────────────────────
+$userLocationsAll   = getUserLocations();
+$allowedLocationIds = array_column($userLocationsAll, 'id');
+
 // Filters
 $filterStatus   = $_GET['status']      ?? '';
 $filterRoom     = $_GET['room']        ?? '';
-$filterLocation = $_GET['location_id'] ?? '';
 $filterType     = $_GET['asset_type']  ?? '';
 $filterBrand    = $_GET['brand']       ?? '';
 $filterMonths   = (int)($_GET['months'] ?? 12);
 $showDetails    = isset($_GET['details']) && $_GET['details'] === '1';
+
+// Locatiefilter — alleen als die in de toegestane lijst zit
+$requestedLoc   = $_GET['location_id'] ?? '';
+if ($requestedLoc && !in_array((int)$requestedLoc, $allowedLocationIds)) {
+    $requestedLoc = ''; // Geen toegang → negeer
+}
+// Standaard: huidige sessielocatie
+$filterLocation = $requestedLoc ?: (string)getLocationId();
+// Als alleen 1 locatie beschikbaar: forceer die
+if (count($allowedLocationIds) === 1) {
+    $filterLocation = (string)$allowedLocationIds[0];
+}
 
 $titles = [
     'all'          => 'Volledig asset overzicht',
@@ -30,9 +45,22 @@ $titles = [
 $title = $titles[$type] ?? 'Rapport';
 
 // Helper: basis WHERE clausule bouwen
+// Altijd beperkt tot toegestane locaties van de ingelogde gebruiker
 function buildWhere(string $loc, string $status, string $room, string $atype, string $brand, string $p = 'a'): array {
+    global $allowedLocationIds;
     $where = []; $params = [];
-    if ($loc)    { $where[] = "$p.location_id = ?"; $params[] = $loc; }
+    if ($loc) {
+        // Specifieke locatie gevraagd
+        $where[]  = "$p.location_id = ?";
+        $params[] = (int)$loc;
+    } elseif (!empty($allowedLocationIds)) {
+        // Geen specifieke locatie: toon alleen toegestane locaties
+        $ph       = implode(',', array_fill(0, count($allowedLocationIds), '?'));
+        $where[]  = "$p.location_id IN ($ph)";
+        $params   = array_merge($params, $allowedLocationIds);
+    } else {
+        $where[]  = '1=0'; // Geen locaties: niets tonen
+    }
     if ($status) { $where[] = "$p.status = ?";      $params[] = $status; }
     if ($room)   { $where[] = "$p.room = ?";        $params[] = $room; }
     if ($atype)  { $where[] = "$p.type = ?";        $params[] = $atype; }
@@ -203,7 +231,7 @@ if ($export === 'csv') {
 }
 
 // Hulpdata
-$userLocations = getUserLocations();
+$userLocations = $userLocationsAll; // al geladen bovenaan
 $allRooms      = getRoomsByLocation((int)$filterLocation);
 $allTypes      = getAssetTypes();
 $allStatuses   = getAssetStatuses();
@@ -235,17 +263,19 @@ include __DIR__ . '/../../templates/header.php';
         <form method="GET" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
             <input type="hidden" name="type" value="<?= $type ?>">
 
-            <?php if (count($userLocations) > 1 || getRole() === 'superadmin'): ?>
+            <?php if (count($userLocations) > 1): ?>
             <div>
                 <label style="font-size:0.8rem;font-weight:600;display:block;margin-bottom:3px;">Locatie</label>
                 <select name="location_id" class="form-control" style="width:170px;">
-                    <option value="">Alle locaties</option>
+                    <option value="">Alle mijn locaties</option>
                     <?php foreach ($userLocations as $loc): ?>
                     <option value="<?= $loc['id'] ?>" <?= $filterLocation == $loc['id'] ? 'selected':'' ?>>
                         <?= htmlspecialchars($loc['name']) ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>
+            <?php else: ?>
+            <input type="hidden" name="location_id" value="<?= htmlspecialchars($filterLocation) ?>">
             <?php endif; ?>
 
             <?php if ($type !== 'per_status'): ?>
