@@ -426,9 +426,11 @@ include __DIR__ . '/../../templates/header.php';
 
 <!-- Data voor JavaScript -->
 <script>
-const statusOptions = <?= json_encode(array_keys(getAssetStatuses())) ?>;
+const statusOptions   = <?= json_encode(array_keys(getAssetStatuses())) ?>;
 const locationOptions = <?= json_encode(array_map(fn($l) => ['id' => $l['id'], 'name' => $l['name']], getUserLocations())) ?>;
-const roomOptions = <?= json_encode(array_map(fn($r) => $r['name'], getRoomsByLocation(getLocationId()))) ?>;
+const roomOptions     = <?= json_encode(array_map(fn($r) => $r['name'], getRoomsByLocation(getLocationId()))) ?>;
+const typeOptions     = <?= json_encode(array_map(fn($t) => $t['name'], query("SELECT name FROM asset_types WHERE active=1 ORDER BY name"))) ?>;
+const brandOptions    = <?= json_encode(array_map(fn($b) => $b['name'], query("SELECT name FROM brands WHERE active=1 ORDER BY name"))) ?>;
 
 function toggleAll(cb) {
     document.querySelectorAll('.assetCb').forEach(c => c.checked = cb.checked);
@@ -501,6 +503,28 @@ function updateValueInput(fieldName) {
         roomOptions.forEach(r => {
             const opt = document.createElement('option');
             opt.value = r; opt.textContent = r;
+            sel.appendChild(opt);
+        });
+        valueInput.replaceWith(sel);
+
+    } else if (fieldName === 'type') {
+        const sel = document.createElement('select');
+        sel.name = 'field_value'; sel.id = 'dynamicInput'; sel.className = 'form-control';
+        sel.innerHTML = '<option value="">Kies soort...</option>';
+        typeOptions.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t; opt.textContent = t;
+            sel.appendChild(opt);
+        });
+        valueInput.replaceWith(sel);
+
+    } else if (fieldName === 'brand') {
+        const sel = document.createElement('select');
+        sel.name = 'field_value'; sel.id = 'dynamicInput'; sel.className = 'form-control';
+        sel.innerHTML = '<option value="">Kies merk...</option>';
+        brandOptions.forEach(b => {
+            const opt = document.createElement('option');
+            opt.value = b; opt.textContent = b;
             sel.appendChild(opt);
         });
         valueInput.replaceWith(sel);
