@@ -18,6 +18,7 @@ $menu = [
 
 if (getRole() === 'superadmin') {
     $menu[] = ['url' => 'system.php', 'icon' => '⚙️', 'title' => 'Systeem & Audit log', 'desc' => 'Bekijk systeeminfo en alle wijzigingen in het systeem.'];
+    $menu[] = ['url' => 'backup.php',  'icon' => '💾', 'title' => 'Backup & Herstel',    'desc' => 'Database, bestanden of volledige backup downloaden.'];
 }
 ?>
 <div class="page-header"><h1>⚙️ Instellingen</h1></div>
