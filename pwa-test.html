@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AssetTrack</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#2563eb">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="AssetTrack">
+<link rel="apple-touch-icon" href="/assets/img/icon-192.png">
+<style>
+body{font-family:sans-serif;padding:30px;background:#f0f4f8;text-align:center;}
+h2{color:#1a2332;}
+.status{background:white;border-radius:10px;padding:14px;margin:8px 0;text-align:left;font-size:0.9rem;}
+.ok{border-left:4px solid #10b981;}
+.err{border-left:4px solid #ef4444;}
+#installBtn{display:none;margin:20px auto;padding:16px 32px;background:#2563eb;
+    color:white;border:none;border-radius:10px;font-size:1.1rem;font-weight:700;cursor:pointer;}
+</style>
+</head>
+<body>
+<h2>📦 AssetTrack PWA Test</h2>
+<div id="log"></div>
+<button id="installBtn" onclick="doInstall()">📲 Installeren als app</button>
+
+<script>
+var log = document.getElementById('log');
+var deferredPrompt = null;
+
+function show(ok, msg) {
+    var d = document.createElement('div');
+    d.className = 'status ' + (ok ? 'ok' : 'err');
+    d.textContent = (ok ? '✅ ' : '❌ ') + msg;
+    log.appendChild(d);
+}
+
+// 1. HTTPS
+show(location.protocol === 'https:', 'HTTPS: ' + location.href);
+
+// 2. SW
+if ('serviceWorker' in navigator) {
+    show(true, 'Service Worker: ondersteund');
+    navigator.serviceWorker.register('/assets/sw.js')
+    .then(function(r) {
+        show(true, 'SW geregistreerd: ' + r.scope);
+    })
+    .catch(function(e) {
+        show(false, 'SW FOUT: ' + e);
+    });
+} else {
+    show(false, 'Service Worker: NIET ondersteund');
+}
+
+// 3. Manifest
+fetch('/manifest.json?v=' + Date.now())
+.then(function(r) { return r.json(); })
+.then(function(m) {
+    show(true, 'Manifest OK: ' + m.name + ' | start: ' + m.start_url + ' | scope: ' + m.scope);
+})
+.catch(function(e) { show(false, 'Manifest FOUT: ' + e); });
+
+// 4. Install prompt
+window.addEventListener('beforeinstallprompt', function(e) {
+    deferredPrompt = e;
+    show(true, 'Install prompt beschikbaar!');
+    document.getElementById('installBtn').style.display = 'block';
+});
+
+window.addEventListener('appinstalled', function() {
+    show(true, 'App succesvol geinstalleerd!');
+});
+
+setTimeout(function() {
+    if (!deferredPrompt) {
+        show(false, 'beforeinstallprompt na 5s nog niet ontvangen');
+    }
+}, 5000);
+
+function doInstall() {
+    if (deferredPrompt) {
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then(function(r) {
+            show(true, 'Keuze: ' + r.outcome);
+            deferredPrompt = null;
+        });
+    }
+}
+</script>
+</body>
+</html>
