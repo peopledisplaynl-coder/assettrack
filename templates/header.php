@@ -79,16 +79,33 @@ $fontSlug = urlencode(preg_replace('/[^a-zA-Z0-9 ]/', '', $themeFont));
 
 <!-- iOS installatie banner -->
 <div id="iosBanner" style="display:none;background:<?= $themeSecondary ?>;color:white;
-     padding:10px 16px;text-align:center;font-size:0.82rem;position:relative;z-index:200;">
-    📱 Installeer <?= htmlspecialchars($appName) ?>: tik op
-    <span style="background:white;color:<?= $themeSecondary ?>;border-radius:4px;
-                 padding:1px 7px;margin:0 3px;font-weight:700;">Deel ⎋</span>
-    en kies
-    <span style="background:white;color:<?= $themeSecondary ?>;border-radius:4px;
-                 padding:1px 7px;margin:0 3px;font-weight:700;">Zet op beginscherm</span>
+     padding:12px 20px;text-align:center;font-size:0.85rem;position:relative;z-index:200;
+     border-bottom:2px solid <?= $activePrimary ?>;">
+    📱 <strong>Installeer <?= htmlspecialchars($appName) ?> als app:</strong>
+    tik op <span style="background:rgba(255,255,255,0.2);border-radius:4px;
+                 padding:2px 8px;margin:0 3px;font-weight:700;">Deel ⎋</span>
+    en kies <span style="background:rgba(255,255,255,0.2);border-radius:4px;
+                 padding:2px 8px;margin:0 3px;font-weight:700;">Zet op beginscherm</span>
     <button onclick="dismissIOSBanner()"
             style="position:absolute;right:12px;top:50%;transform:translateY(-50%);
-                   background:none;border:none;color:white;font-size:1.2rem;cursor:pointer;">✕</button>
+                   background:none;border:none;color:rgba(255,255,255,0.7);
+                   font-size:1.3rem;cursor:pointer;line-height:1;">✕</button>
+</div>
+
+<!-- Android installatie banner -->
+<div id="androidBanner" style="display:none;background:<?= $themeSecondary ?>;color:white;
+     padding:12px 20px;display:none;align-items:center;justify-content:center;
+     gap:12px;font-size:0.85rem;position:relative;z-index:200;
+     border-bottom:2px solid <?= $activePrimary ?>;">
+    <span>📱 <strong><?= htmlspecialchars($appName) ?></strong> installeren als app?</span>
+    <button id="androidInstallBtn" onclick="doAndroidInstall()"
+            style="background:<?= $activePrimary ?>;color:white;border:none;
+                   padding:6px 16px;border-radius:6px;font-weight:700;cursor:pointer;font-size:0.85rem;">
+        Installeren
+    </button>
+    <button onclick="dismissAndroidBanner()"
+            style="background:none;border:none;color:rgba(255,255,255,0.6);
+                   font-size:1.2rem;cursor:pointer;padding:0 4px;">✕</button>
 </div>
 
 <header class="main-header">
@@ -253,8 +270,47 @@ function dismissIOSBanner() {
     document.getElementById('iosBanner').style.display = 'none';
     localStorage.setItem('iosBannerDismissed','1');
 }
+// ── Service Worker ───────────────────────────────────────────────
 if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('<?= BASE_URL ?>/assets/sw.js',{scope:'<?= BASE_URL ?>/'}).catch(function(){});
+    window.addEventListener('load', function() {
+        navigator.serviceWorker.register('<?= BASE_URL ?>/assets/sw.js')
+        .then(function(reg){ console.log('SW ok:', reg.scope); })
+        .catch(function(err){ console.log('SW fout:', err); });
+    });
+}
+
+// Geen e.preventDefault() — Chrome toont zelf de native install prompt
+window.addEventListener('beforeinstallprompt', function(e) {
+    console.log('PWA: install prompt beschikbaar');
+    // Chrome handelt de mini-infobar zelf af
+});
+function doAndroidInstall() {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then(function(result) {
+        if (result.outcome === 'accepted') {
+            dismissAndroidBanner();
+        }
+        deferredPrompt = null;
+    });
+}
+function dismissAndroidBanner() {
+    var banner = document.getElementById('androidBanner');
+    if (banner) banner.style.display = 'none';
+    localStorage.setItem('androidBannerDismissed', '1');
+}
+
+// ── iOS install banner ────────────────────────────────────────────
+(function(){
+    var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    var isStandalone = window.navigator.standalone;
+    if (isIOS && !isStandalone && !localStorage.getItem('iosBannerDismissed')) {
+        document.getElementById('iosBanner').style.display = 'block';
+    }
+})();
+function dismissIOSBanner() {
+    document.getElementById('iosBanner').style.display = 'none';
+    localStorage.setItem('iosBannerDismissed', '1');
 }
 </script>
 
