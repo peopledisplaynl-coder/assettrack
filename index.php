@@ -58,6 +58,11 @@ $fontSlug = urlencode(preg_replace('/[^a-zA-Z0-9 ]/', '', $themeFont));
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><?= htmlspecialchars($appName) ?> — Inloggen</title>
 <meta name="theme-color" content="<?= $themeSecondary ?>">
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" href="<?= BASE_URL ?>/assets/img/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="<?= htmlspecialchars($appName) ?>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=<?= $fontSlug ?>:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -281,6 +286,18 @@ body {
     </div>
 </div>
 
+<div id="iosBannerLogin" style="display:none;position:fixed;bottom:0;left:0;right:0;
+     background:<?= $themeSecondary ?>;color:white;padding:12px 20px;
+     text-align:center;font-size:0.85rem;z-index:999;
+     border-top:3px solid <?= $themePrimary ?>;">
+    📱 Installeer als app: tik op
+    <span style="background:rgba(255,255,255,0.2);padding:2px 8px;border-radius:4px;font-weight:700;">Deel ⎋</span>
+    en kies <span style="background:rgba(255,255,255,0.2);padding:2px 8px;border-radius:4px;font-weight:700;">Zet op beginscherm</span>
+    <button onclick="this.parentElement.style.display='none';localStorage.setItem('iosBannerDismissed','1')"
+            style="position:absolute;right:12px;top:50%;transform:translateY(-50%);
+                   background:none;border:none;color:white;font-size:1.3rem;cursor:pointer;">✕</button>
+</div>
+
 <!-- Rechter paneel: formulier -->
 <div class="login-form-wrap">
     <div class="login-form-inner">
@@ -319,5 +336,17 @@ body {
     </div>
 </div>
 
+<script>
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./assets/sw.js')
+    .then(function(r){ console.log('SW ok'); })
+    .catch(function(e){ console.log('SW fout:', e); });
+}
+// iOS
+if (/iphone|ipad|ipod/i.test(navigator.userAgent) && !navigator.standalone) {
+    var b = document.getElementById('iosBannerLogin');
+    if (b && !localStorage.getItem('iosBannerDismissed')) b.style.display = 'block';
+}
+</script>
 </body>
 </html>
