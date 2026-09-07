@@ -42,8 +42,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $errors[] = 'Ongeldig bestandstype. Gebruik jpg, png, gif of webp.';
                 }
 
-                if ($image['size'] > 5 * 1024 * 1024) {
-                    $errors[] = 'Maximale bestandsgrootte is 5MB.';
+                // Ruime bovengrens voor de originele upload — mobiele camera's produceren
+                // vaak 3-10MB per foto. Het bestand wordt hierna alsnog verkleind/gecomprimeerd,
+                // dus het uiteindelijk opgeslagen bestand is veel kleiner dan deze grens.
+                if ($image['size'] > 15 * 1024 * 1024) {
+                    $errors[] = 'Maximale bestandsgrootte is 15MB.';
                 }
 
                 $imageCount = queryOne("SELECT COUNT(*) as total FROM asset_images WHERE asset_id = ?", [$assetId]);
@@ -52,11 +55,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 if (empty($errors)) {
-                    $filename = 'asset_' . $assetId . '_' . time() . '.' . $extension;
+                    // Altijd opslaan als .jpg: de foto wordt verkleind en gecomprimeerd
+                    // zodat honderden assets met foto's de webruimte niet vol laten lopen.
+                    $filename = 'asset_' . $assetId . '_' . time() . '.jpg';
                     $destination = $uploadDir . $filename;
 
-                    if (!move_uploaded_file($image['tmp_name'], $destination)) {
-                        $errors[] = 'Kon het bestand niet opslaan.';
+                    if (!compressUploadedImage($image['tmp_name'], $destination)) {
+                        $errors[] = 'Kon de afbeelding niet verwerken. Probeer een andere foto.';
                     } else {
                         $nextOrder = queryOne("SELECT COALESCE(MAX(sort_order), 0) + 1 as next_order FROM asset_images WHERE asset_id = ?", [$assetId]);
                         $order = $nextOrder['next_order'] ?? 1;
@@ -184,7 +189,7 @@ include __DIR__ . '/../../templates/header.php';
             <div class="form-group">
                 <label for="image">Selecteer afbeelding</label>
                 <input type="file" id="image" name="image" accept="image/jpeg,image/png,image/gif,image/webp" required>
-                <small>Max 5MB. JPG, PNG, GIF of WEBP.</small>
+                <small>Max 15MB. JPG, PNG, GIF of WEBP — wordt automatisch verkleind en gecomprimeerd.</small>
             </div>
             <button type="submit" class="btn btn-primary">Uploaden</button>
         </form>
