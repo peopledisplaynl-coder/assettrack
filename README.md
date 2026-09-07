@@ -7,7 +7,7 @@ AssetTrack is een gratis en open source webapplicatie voor het beheren van IT-ap
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![PHP](https://img.shields.io/badge/PHP-8.x-blue)](https://php.net)
 [![MySQL](https://img.shields.io/badge/MySQL-5.7%2B-orange)](https://mysql.com)
-[![Version](https://img.shields.io/badge/versie-3.1-green)](https://github.com/peopledisplaynl-coder/assettrack/releases)
+[![Version](https://img.shields.io/badge/versie-3.7-green)](https://github.com/peopledisplaynl-coder/assettrack/releases)
 
 ---
 
