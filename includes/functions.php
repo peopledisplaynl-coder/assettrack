@@ -283,6 +283,124 @@ function deleteAssetImage(int $imageId, int $assetId): bool {
     return true;
 }
 
+// ─── Afbeeldingen verkleinen/comprimeren ──────────────────────────────────────
+
+// Langste zijde in pixels na verkleinen. 1600px is ruim voldoende om details op een
+// asset-foto (typeplaatje, serienummer) nog goed leesbaar te houden.
+if (!defined('ASSET_IMAGE_MAX_DIMENSION')) {
+    define('ASSET_IMAGE_MAX_DIMENSION', 1600);
+}
+// JPEG kwaliteit 0-100. 80 geeft een goede balans tussen bestandsgrootte en kwaliteit.
+if (!defined('ASSET_IMAGE_JPEG_QUALITY')) {
+    define('ASSET_IMAGE_JPEG_QUALITY', 80);
+}
+
+/**
+ * Verkleint en comprimeert een geüploade afbeelding en slaat die op als JPEG.
+ * Dit voorkomt dat foto's rechtstreeks van een telefooncamera (vaak 3-10MB) de
+ * webruimte snel vullen, terwijl de foto functioneel scherp genoeg blijft.
+ *
+ * - Ondersteunt JPEG, PNG, GIF en WEBP als bron; de output is altijd JPEG.
+ * - Corrigeert de EXIF-rotatie van mobiele foto's zodat ze rechtop blijven staan.
+ * - Vergroot een afbeelding nooit, alleen verkleinen indien nodig.
+ *
+ * @param string $sourcePath   Pad naar het (tijdelijke) geüploade bestand
+ * @param string $destPath     Doelpad (.jpg) voor het gecomprimeerde resultaat
+ * @param int    $maxDimension Maximale breedte/hoogte in pixels
+ * @param int    $quality      JPEG kwaliteit 0-100
+ * @return bool true bij succes
+ */
+function compressUploadedImage(
+    string $sourcePath,
+    string $destPath,
+    int $maxDimension = ASSET_IMAGE_MAX_DIMENSION,
+    int $quality = ASSET_IMAGE_JPEG_QUALITY
+): bool {
+    if (!extension_loaded('gd')) {
+        return false;
+    }
+
+    $info = @getimagesize($sourcePath);
+    if ($info === false) {
+        return false;
+    }
+    [$width, $height, $type] = $info;
+
+    if ($width <= 0 || $height <= 0) {
+        return false;
+    }
+
+    // Bescherm tegen extreem grote camerafoto's die te veel geheugen zouden vragen
+    $megapixels = ($width * $height) / 1_000_000;
+    if ($megapixels > 40) {
+        return false;
+    }
+
+    // Geef GD wat extra geheugen als de host dat toestaat (nooit verlagen)
+    $currentLimit = ini_get('memory_limit');
+    if ($currentLimit !== '-1' && (int)$currentLimit < 256) {
+        @ini_set('memory_limit', '256M');
+    }
+
+    $source = match ($type) {
+        IMAGETYPE_JPEG => @imagecreatefromjpeg($sourcePath),
+        IMAGETYPE_PNG  => @imagecreatefrompng($sourcePath),
+        IMAGETYPE_GIF  => @imagecreatefromgif($sourcePath),
+        IMAGETYPE_WEBP => function_exists('imagecreatefromwebp') ? @imagecreatefromwebp($sourcePath) : false,
+        default        => false,
+    };
+
+    if (!$source) {
+        return false;
+    }
+
+    // EXIF-rotatie corrigeren (alleen relevant voor JPEG, alleen als exif-extensie beschikbaar is)
+    if ($type === IMAGETYPE_JPEG && function_exists('exif_read_data')) {
+        $exif = @exif_read_data($sourcePath);
+        $orientation = (int)($exif['Orientation'] ?? 0);
+        if (in_array($orientation, [3, 6, 8], true)) {
+            $angle = match ($orientation) {
+                3 => 180,
+                6 => -90,
+                8 => 90,
+            };
+            $rotated = imagerotate($source, $angle, 0);
+            if ($rotated !== false) {
+                imagedestroy($source);
+                $source = $rotated;
+            }
+        }
+    }
+
+    $width = imagesx($source);
+    $height = imagesy($source);
+
+    // Alleen verkleinen, nooit vergroten
+    if ($width > $maxDimension || $height > $maxDimension) {
+        $ratio = min($maxDimension / $width, $maxDimension / $height);
+        $newWidth = max(1, (int)round($width * $ratio));
+        $newHeight = max(1, (int)round($height * $ratio));
+    } else {
+        $newWidth = $width;
+        $newHeight = $height;
+    }
+
+    $resized = imagecreatetruecolor($newWidth, $newHeight);
+    // Witte achtergrond i.p.v. zwart bij een bron met transparantie (PNG/GIF/WEBP)
+    $white = imagecolorallocate($resized, 255, 255, 255);
+    imagefill($resized, 0, 0, $white);
+    imagealphablending($resized, true);
+
+    imagecopyresampled($resized, $source, 0, 0, 0, 0, $newWidth, $newHeight, $width, $height);
+
+    $ok = imagejpeg($resized, $destPath, $quality);
+
+    imagedestroy($source);
+    imagedestroy($resized);
+
+    return $ok;
+}
+
 // Valideert één CSV rij zonder te importeren
 function validateAssetRow(array $data, int $locationId): array {
     $errors   = [];
