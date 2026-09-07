@@ -15,12 +15,12 @@ AssetTrack is een gratis en open source webapplicatie voor het beheren van IT-ap
 
 - **Asset registratie** — Laptops, desktops, Chromebooks, printers en meer met alle relevante velden
 - **Multi-locatie** — Meerdere locaties en ruimtes vanuit één systeem
-- **Labels & QR-codes** — Avery, Dymo, Brother, Zebra of aangepast formaat
+- **Labels & QR-codes** — Labels — QR-code of streepjescode** — Avery, Dymo, Brother, Zebra of aangepast formaat
 - **Rapporten** — 8 ingebouwde rapporten, exporteerbaar naar CSV
 - **CSV import** — Importeer honderden assets tegelijk vanuit Excel
 - **Kennisbank** — Handleidingen gekoppeld aan asset types
 - **Asset koppelingen** — Desktop aan monitor, server aan UPS, etc.
-- **QR Scanner** — Ingebouwde camera scanner via de browser
+- **Scanner** — Ingebouwde camera scanner via de browser, leest zowel QR-codes als streepjescodes (Code128)
 - **PWA** — Installeer als app op mobiel
 - **Thema instellingen** — Eigen kleuren, logo en lettertype per installatie
 
