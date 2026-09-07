@@ -54,13 +54,21 @@ if (!isLoggedIn() || !hasPermission('scan_assets')) {
         <button class="btn btn-stop" onclick="stopScanner()">⏹ Stoppen</button>
     </div>
     <button class="btn btn-start" id="startBtn" onclick="startScanner()">▶ Scanner starten</button>
-    <p class="hint">Richt de camera op een AssetTrack QR-code. De app detecteert hem automatisch.</p>
+    <p class="hint">Richt de camera op een AssetTrack QR-code of streepjescode. De app detecteert hem automatisch.</p>
 </div>
 
 <script>
 let html5QrCode = null;
 let currentCamera = 'environment';
 let scanning = false;
+
+// Zowel QR-codes als streepjescodes (Code128) herkennen -- zie modules/labels/print.php,
+// waar de gebruiker per label kiest tussen een QR-code of een streepjescode. Zonder deze
+// lijst herkent html5-qrcode standaard alleen QR-codes.
+const formatsToSupport = [
+    Html5QrcodeSupportedFormats.QR_CODE,
+    Html5QrcodeSupportedFormats.CODE_128,
+];
 
 function setStatus(msg, type) {
     const box = document.getElementById('statusBox');
@@ -73,7 +81,7 @@ async function startScanner() {
     setStatus('Camera starten...');
 
     try {
-        html5QrCode = new Html5Qrcode("reader");
+        html5QrCode = new Html5Qrcode("reader", { formatsToSupport });
 
         await html5QrCode.start(
             { facingMode: currentCamera },
@@ -84,7 +92,7 @@ async function startScanner() {
 
         scanning = true;
         document.getElementById('runningControls').style.display = 'flex';
-        setStatus('📷 Scanner actief — richt op QR-code');
+        setStatus('📷 Scanner actief — richt op QR-code of streepjescode');
 
     } catch (err) {
         setStatus('Camera kon niet starten. Controleer camera-toegang.', 'error');
@@ -96,16 +104,24 @@ async function startScanner() {
 function onScanSuccess(decodedText) {
     if (!scanning) return;
     scanning = false;
-    setStatus('✅ QR-code gevonden! Laden...', 'success');
+    setStatus('✅ Code gevonden! Laden...', 'success');
+
+    // Een QR-code bevat al een volledige scan.php-URL. Een streepjescode bevat
+    // alleen het kale assetnummer (zo staat het ook op het label) -- die zetten we
+    // hier zelf om naar dezelfde scan.php-pagina, die op assetnummer kan opzoeken.
+    let destination = decodedText;
+    if (!/^https?:\/\//i.test(decodedText)) {
+        destination = '<?= BASE_URL ?>/modules/assets/scan.php?asset=' + encodeURIComponent(decodedText);
+    }
 
     if (html5QrCode) {
         html5QrCode.stop().then(() => {
-            window.location.href = decodedText;
+            window.location.href = destination;
         }).catch(() => {
-            window.location.href = decodedText;
+            window.location.href = destination;
         });
     } else {
-        window.location.href = decodedText;
+        window.location.href = destination;
     }
 }
 
