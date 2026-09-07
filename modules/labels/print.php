@@ -17,6 +17,10 @@ if (empty($ids)) {
     exit;
 }
 
+// 'qr' = QR-code (scan met telefoon -> opent assetpagina), 'barcode' = Code128 streepjescode
+// (te lezen met oudere streepjescodescanners; die geven het assetnummer als tekst door)
+$codeType = ($_POST['code_type'] ?? 'qr') === 'barcode' ? 'barcode' : 'qr';
+
 $showFields = [
     'show_asset_number' => true,
     'show_qr'           => true,
@@ -51,6 +55,13 @@ $formats = [
     'large'         => ['w'=>'89mm',   'h'=>'36mm',   'font'=>'8px', 'a4'=>false],
     'dymo_small'    => ['w'=>'57mm',   'h'=>'32mm',   'font'=>'7px', 'a4'=>false],
     'dymo_medium'   => ['w'=>'89mm',   'h'=>'28mm',   'font'=>'7px', 'a4'=>false],
+    // Dymo 99012/99017: de rol is fysiek 36mm breed x 89mm lang, maar de INHOUD
+    // wordt bewust "breed" (89x36, net als 'large') opgemaakt -- net zoveel
+    // schrijfruimte voor tekst als bij de andere Dymo-formaten -- en daarna via
+    // force_rotate altijd 90° gedraaid om op de rol te passen. Puur een label in
+    // portrait-vorm DEFINIËREN (36x89) zou de tekst juist in de smalle 36mm
+    // proppen; dat is precies wat we hier vermijden.
+    'dymo_99012'    => ['w'=>'89mm',   'h'=>'36mm',   'font'=>'8px', 'a4'=>false, 'force_rotate'=>true],
     'brother_small' => ['w'=>'29mm',   'h'=>'62mm',   'font'=>'6px', 'a4'=>false],
     'zebra_50x25'   => ['w'=>'50mm',   'h'=>'25mm',   'font'=>'6px', 'a4'=>false],
 
@@ -81,6 +92,23 @@ if ($format === 'custom') {
 
 $size = $formats[$format] ?? $formats['medium'];
 $isA4 = $size['a4'];
+
+// Afdrukrichting voor losse labelprinters (rollen zoals Dymo/Brother/Zebra).
+// Sommige printerdrivers verwachten de paginagrootte in de richting van de rol
+// (rolbreedte x looplengte) i.p.v. hoe het label inhoudelijk is opgemaakt, en
+// draaien de afdruk daarom 90°. $size['w']/$size['h'] blijven daarom altijd de
+// NORMALE, leesbare labelafmeting -- de inhoud (tekst/QR/streepjescode) wordt
+// dus nooit door elkaar gepropt. Alleen de fysieke PAGINA/het voetprint van het
+// label ($pageW x $pageH, hieronder) wordt omgewisseld zodat die overeenkomt
+// met wat de printer verwacht; de content zelf wordt via CSS (.label-inner)
+// vervolgens weer 90° teruggedraaid naar de juiste leesrichting.
+// Sommige formaten (zoals de Dymo 99012, hierboven) hebben een rol die altijd
+// smaller is dan de leesbare content -- daar staat 'force_rotate' aan, en
+// draaien we sowieso, los van het aan/uit-vinkje van de gebruiker.
+$rotate = !$isA4 && (isset($_POST['rotate_label']) || !empty($size['force_rotate']));
+$pageW  = $rotate ? $size['h'] : $size['w'];
+$pageH  = $rotate ? $size['w'] : $size['h'];
+
 $cols = $size['cols'] ?? 1;
 $labelsPerPage = $cols * ($size['rows_per_page'] ?? 999);
 
@@ -92,11 +120,52 @@ if ($isA4 && $labelsPerPage > 0) {
     $pages = [$assets];
 }
 
-// QR grootte — max 75% van labelhoogte in pixels (1mm = 3.78px)
-// Dit zorgt dat QR altijd binnen het label blijft
-// QR pixels — klein houden, CSS schaalt mee
-$hMm  = (float)$size['h'];
-$qrPx = 60; // Vaste kleine grootte, CSS max-height begrenst de rest
+$hMm = (float)$size['h'];
+$wMm = (float)$size['w'];
+
+// Portrait (smal-en-lang) labels -- zoals de Dymo 99012 (36x89mm) -- hebben een
+// andere lay-out nodig dan brede/lage labels: tekst en code passen niet naast
+// elkaar op maar 36mm breedte. $isPortrait bepaalt of we stapelen i.p.v. naast
+// elkaar zetten.
+$isPortrait = $hMm > $wMm;
+
+// Stapel-layout (tekst boven, code eronder, code over de volle breedte):
+// altijd bij een streepjescode (van nature breed-en-laag, past niet naast een
+// tekstkolom), en ook bij een portrait-label (te smal voor twee kolommen naast
+// elkaar, ongeacht codetype).
+$stacked = $codeType === 'barcode' || $isPortrait;
+
+// Lettergrootte in mm, gebaseerd op de KRAPSTE afmeting van het label (bij de
+// meeste bestaande formaten is dat de hoogte, bij een portrait-label zoals de
+// 99012 is dat juist de breedte) -- schaalt zo altijd mee met de werkelijk
+// beschikbare ruimte, met een ondergrens voor leesbaarheid.
+$fontBasisMm = min($wMm, $hMm);
+$fontMm = max(2.2, min(4.5, $fontBasisMm * 0.13));
+
+// QR-code: altijd op hoge resolutie genereren (ruim boven wat er fysiek nodig is)
+// en pas daarna via CSS verkleinen naar de labelgrootte. Dat geeft een scherpe,
+// goed scanbare code -- de oude vaste 60px werd juist uitgerekt en dus wazig.
+$qrPx = (int)max(300, min(900, round($fontBasisMm * 14)));
+
+// Barcode (Code128): de gegenereerde bron blijft bewust LAAG (vaste hoogte, NIET
+// meeschalend met de labelgrootte) zodat de eigen beeldverhouding altijd
+// "breed-en-laag" blijft. De CSS hierna laat de SVG proportioneel passen, en
+// gebruikt daardoor altijd zoveel mogelijk van de beschikbare BREEDTE i.p.v.
+// beperkt te worden door de hoogte -- cruciaal op smalle labels, anders lopen
+// de streepjes tegen elkaar aan tot een zwart vlak (wat er eerst gebeurde).
+$barcodeHeightPx = 55;
+
+// Aandeel van de labelhoogte gereserveerd voor de code bij een gestapelde
+// layout: een streepjescode heeft meer ruimte nodig dan een QR-code.
+$codeFlexPct = $codeType === 'barcode' ? 58 : 42;
+
+// Zelfs de volle labelbreedte is op een portrait-label (bv. 36mm) vaak te
+// weinig voor een leesbare streepjescode. In dat geval draaien we alleen de
+// streepjescode-afbeelding 90° binnen zijn eigen vak, zodat hij de langere as
+// van het label (de hoogte) als breedte kan gebruiken.
+$barcodeRotate = $stacked && $codeType === 'barcode' && $isPortrait;
+$codeBoxWMm = max(8, $wMm - 3);
+$codeBoxHMm = max(8, $hMm * ($codeFlexPct / 100) - 3);
 
 $baseUrl = (isset($_SERVER['HTTPS']) ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'] . BASE_URL;
 ?>
@@ -106,9 +175,10 @@ $baseUrl = (isset($_SERVER['HTTPS']) ? 'https' : 'http') . '://' . $_SERVER['HTT
 <meta charset="UTF-8">
 <title>Labels afdrukken</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.5/JsBarcode.all.min.js"></script>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
-body { font-family: Arial, Helvetica, sans-serif; background:#f3f4f6; font-size: <?= $size['font'] ?>; }
+body { font-family: Arial, Helvetica, sans-serif; background:#f3f4f6; font-size: <?= $fontMm ?>mm; }
 
 .toolbar {
     background:#1a2332; color:white; padding:10px 16px;
@@ -148,15 +218,30 @@ body { font-family: Arial, Helvetica, sans-serif; background:#f3f4f6; font-size:
 <?php endif; ?>
 
 .label {
-    width: <?= $size['w'] ?>;
-    height: <?= $size['h'] ?>;
+    width: <?= $pageW ?>;
+    height: <?= $pageH ?>;
     border: 1px solid #ccc;
     background: white;
     display: flex;
-    align-items: stretch;
-    padding: 2px 4px 2px 3px;
+    align-items: center;
+    justify-content: center;
     overflow: hidden;
     page-break-inside: avoid;
+}
+/* .label-inner heeft altijd de NORMALE (leesbare) labelafmeting en bevat de
+   bestaande tekst/code-indeling ongewijzigd. Bij "90° gedraaid" wordt alleen
+   deze binnenkant gedraaid -- doordat hij precies gecentreerd zit in de (nu
+   omgewisselde) buitenste .label, vult hij die na de draai weer exact. */
+.label-inner {
+    width: <?= $size['w'] ?>;
+    height: <?= $size['h'] ?>;
+    flex-shrink: 0;
+    display: flex;
+    align-items: stretch;
+    padding: 2px 4px 2px 3px;
+    <?php if ($rotate): ?>
+    transform: rotate(90deg);
+    <?php endif; ?>
 }
 
 /* Op scherm: subtiele scheiding zichtbaar maken */
@@ -189,14 +274,65 @@ body { font-family: Arial, Helvetica, sans-serif; background:#f3f4f6; font-size:
     max-height: <?= $size['h'] ?>;
     overflow: hidden;
 }
-.label-right > div {
-    overflow: hidden;
-}
+/* Let op: .label-right zelf heeft alleen max-height (geen expliciete height) --
+   een percentage max-height op de afbeelding erin (bv. 100%) resolveert dan
+   NIET betrouwbaar (blijft "auto"/onbeperkt), ook al wordt het vak zelf via
+   align-items:stretch wel degelijk op de juiste hoogte getoond. Bij de gewone
+   (niet-gestapelde) lay-out gebruiken we daarom een absolute mm-waarde i.p.v.
+   een percentage. Bij .label-stacked hieronder is het ouder-vak wél een
+   percentage van een DEFINITIEVE hoogte (flex-basis in een kolom met een vaste
+   labelhoogte), en werkt 100% daar wel betrouwbaar. */
 .label-right img {
     max-width: 100% !important;
     max-height: calc(<?= $size['h'] ?> - 8px) !important;
     width: auto !important;
     height: auto !important;
+    display: block;
+}
+.label-stacked .label-right img {
+    max-height: 100% !important;
+}
+.label-stacked .label-right svg {
+    max-width: 100% !important;
+    max-height: 100% !important;
+    width: 100% !important;
+    height: 100% !important;
+    display: block;
+}
+/* Stapel-layout: tekst boven, code eronder over de volle breedte i.p.v.
+   tekst-links/code-rechts. Gebruikt bij een streepjescode (van nature
+   breed-en-laag, past niet naast een tekstkolom) en bij een portrait-label
+   (te smal voor twee kolommen naast elkaar, ongeacht codetype). De code krijgt
+   een VAST aandeel van de labelhoogte i.p.v. zijn eigen grootte af te dwingen,
+   en langere tekstvelden mogen nu over twee regels lopen i.p.v. hard af te
+   breken -- op een smal label was een enkele regel vaak te kort.*/
+.label-stacked { flex-direction: column; align-items: stretch; }
+.label-stacked .label-left { flex: 1 1 auto; padding-right: 0; min-height: 0; }
+.label-stacked .label-left .lbl-main,
+.label-stacked .label-left .lbl-sub {
+    white-space: normal; overflow-wrap: break-word; text-overflow: clip;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.label-stacked .label-right {
+    flex: 0 0 <?= $codeFlexPct ?>%;
+    max-height: none;
+    width: 100%;
+    padding: 1px 2px;
+}
+/* Streepjescode op een portrait-label: het vak zelf blijft normaal (volle
+   breedte, vast hoogte-aandeel), maar de code-afbeelding erbinnen wordt 90°
+   gedraaid zodat hij de langere as (labelhoogte) als breedte kan gebruiken --
+   anders is zelfs de volle labelbreedte te smal voor leesbare streepjes. */
+.barcode-rotate-wrap {
+    width: <?= $codeBoxHMm ?>mm;
+    height: <?= $codeBoxWMm ?>mm;
+    transform: rotate(90deg);
+}
+.barcode-rotate-wrap svg {
+    max-width: 100% !important;
+    max-height: 100% !important;
+    width: 100% !important;
+    height: 100% !important;
     display: block;
 }
 .asset-nr { font-weight:700; font-size:1.25em; line-height:1.1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -211,7 +347,7 @@ body { font-family: Arial, Helvetica, sans-serif; background:#f3f4f6; font-size:
     @page { size:A4; margin:0; }
     <?php else: ?>
     .a4-page { padding:0; }
-    @page { size: <?= $size['w'] ?> <?= $size['h'] ?>; margin:0; }
+    @page { size: <?= $pageW ?> <?= $pageH ?>; margin:0; }
     <?php endif; ?>
 }
 </style>
@@ -223,6 +359,10 @@ body { font-family: Arial, Helvetica, sans-serif; background:#f3f4f6; font-size:
     <form method="POST" action="<?= BASE_URL ?>/modules/labels/export_pdf.php" style="display:inline;margin:0;">
         <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
         <input type="hidden" name="format" value="<?= htmlspecialchars($format) ?>">
+        <input type="hidden" name="code_type" value="<?= htmlspecialchars($codeType) ?>">
+        <?php if ($rotate): ?>
+        <input type="hidden" name="rotate_label" value="1">
+        <?php endif; ?>
         <?php foreach ($ids as $aid): ?>
         <input type="hidden" name="asset_ids[]" value="<?= $aid ?>">
         <?php endforeach; ?>
@@ -230,8 +370,8 @@ body { font-family: Arial, Helvetica, sans-serif; background:#f3f4f6; font-size:
         <input type="hidden" name="<?= $k ?>" value="1">
         <?php endif; endforeach; ?>
         <?php if ($format === 'custom'): ?>
-        <input type="hidden" name="custom_w" value="<?= (int)$size['w'] ?>">
-        <input type="hidden" name="custom_h" value="<?= (int)$size['h'] ?>">
+        <input type="hidden" name="custom_w" value="<?= (int)($_POST['custom_w'] ?? 62) ?>">
+        <input type="hidden" name="custom_h" value="<?= (int)($_POST['custom_h'] ?? 29) ?>">
         <?php endif; ?>
         <button type="submit" class="btn-pdf">📄 PDF exporteren</button>
     </form>
@@ -248,9 +388,10 @@ foreach ($pages as $pageAssets):
 ?>
 <div class="a4-page">
     <?php foreach ($pageAssets as $asset):
-    $qrId = 'qr_'.$labelIndex++;
+    $codeId = 'code_'.$labelIndex++;
     ?>
     <div class="label">
+        <div class="label-inner<?= $stacked ? ' label-stacked' : '' ?>">
         <div class="label-left">
             <div class="asset-nr"><?= htmlspecialchars($asset['asset_number']) ?></div>
             <?php if ($showFields['show_company']): ?>
@@ -277,26 +418,49 @@ foreach ($pages as $pageAssets):
         </div>
         <?php if ($showFields['show_qr']): ?>
         <div class="label-right">
-            <div id="<?= $qrId ?>"></div>
+            <?php if ($codeType === 'barcode'): ?>
+                <?php if ($barcodeRotate): ?>
+                <div class="barcode-rotate-wrap"><svg id="<?= $codeId ?>"></svg></div>
+                <?php else: ?>
+                <svg id="<?= $codeId ?>"></svg>
+                <?php endif; ?>
+            <?php else: ?>
+            <div id="<?= $codeId ?>"></div>
+            <?php endif; ?>
         </div>
         <?php endif; ?>
+        </div>
     </div>
     <?php endforeach; ?>
 </div>
 <?php endforeach; ?>
 
 <script>
+<?php if ($codeType === 'barcode'): ?>
 <?php
 $i = 0;
 foreach ($assets as $asset):
 ?>
-new QRCode(document.getElementById("qr_<?= $i++ ?>"), {
+try {
+    JsBarcode("#code_<?= $i++ ?>", "<?= addslashes($asset['asset_number']) ?>", {
+        format: "CODE128", displayValue: true, fontSize: <?= max(10, (int)round($barcodeHeightPx * 0.16)) ?>,
+        height: <?= $barcodeHeightPx ?>, width: 2, margin: 2
+    });
+} catch (e) { console.error('Barcode fout voor asset <?= (int)$asset['id'] ?>:', e); }
+<?php endforeach; ?>
+<?php else: ?>
+<?php
+$i = 0;
+foreach ($assets as $asset):
+?>
+new QRCode(document.getElementById("code_<?= $i++ ?>"), {
     text: "<?= addslashes($baseUrl.'/modules/assets/scan.php?id='.$asset['id']) ?>",
     width: <?= $qrPx ?>, height: <?= $qrPx ?>,
     colorDark:"#000000", colorLight:"#ffffff",
     correctLevel: QRCode.CorrectLevel.M
 });
 <?php endforeach; ?>
+<?php endif; ?>
 </script>
 </body>
 </html>

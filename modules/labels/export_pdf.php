@@ -17,6 +17,10 @@ if (empty($ids)) {
     exit;
 }
 
+// 'qr' = QR-code (scan met telefoon -> opent assetpagina), 'barcode' = Code128 streepjescode
+// (te lezen met oudere streepjescodescanners; die geven het assetnummer als tekst door)
+$codeType = ($_POST['code_type'] ?? 'qr') === 'barcode' ? 'barcode' : 'qr';
+
 $showFields = [
     'show_asset_number' => true,
     'show_qr'           => true,
@@ -46,6 +50,10 @@ $formats = [
     'large'         => ['w'=>'89mm',   'h'=>'36mm',   'font'=>'8pt', 'a4'=>false, 'name'=>'Groot 89x36mm'],
     'dymo_small'    => ['w'=>'57mm',   'h'=>'32mm',   'font'=>'7pt', 'a4'=>false, 'name'=>'Dymo 57x32mm'],
     'dymo_medium'   => ['w'=>'89mm',   'h'=>'28mm',   'font'=>'7pt', 'a4'=>false, 'name'=>'Dymo 89x28mm'],
+    // Dymo 99012/99017: inhoud bewust "breed" opgemaakt (89x36, net als 'large')
+    // voor voldoende schrijfruimte, en via force_rotate altijd gedraaid om op de
+    // fysiek 36mm-brede rol te passen — zie print.php voor de volledige uitleg.
+    'dymo_99012'    => ['w'=>'89mm',   'h'=>'36mm',   'font'=>'8pt', 'a4'=>false, 'name'=>'Dymo 99012 (36x89mm)', 'force_rotate'=>true],
     'brother_small' => ['w'=>'29mm',   'h'=>'62mm',   'font'=>'6pt', 'a4'=>false, 'name'=>'Brother 29x62mm'],
     'zebra_50x25'   => ['w'=>'50mm',   'h'=>'25mm',   'font'=>'6pt', 'a4'=>false, 'name'=>'Zebra 50x25mm'],
     'avery_l7160'   => ['w'=>'63.5mm', 'h'=>'38.1mm', 'font'=>'8pt', 'a4'=>true, 'cols'=>3, 'pt'=>'15.1mm', 'pl'=>'7.2mm',  'gap'=>'0mm',   'rows_per_page'=>7,  'name'=>'Avery L7160 21/vel'],
@@ -71,11 +79,43 @@ if ($format === 'custom') {
 
 $size = $formats[$format] ?? $formats['medium'];
 $isA4 = $size['a4'];
+
+// Afdrukrichting voor losse labelprinters — zie print.php voor de uitleg.
+// $size['w']/$size['h'] blijven de normale, leesbare labelafmeting; alleen de
+// fysieke pagina ($pageW x $pageH) wordt omgewisseld, en .label-inner draait
+// de content via CSS weer terug naar de juiste leesrichting.
+$rotate = !$isA4 && (isset($_POST['rotate_label']) || !empty($size['force_rotate']));
+$pageW  = $rotate ? $size['h'] : $size['w'];
+$pageH  = $rotate ? $size['w'] : $size['h'];
+
 $cols = $size['cols'] ?? 1;
 $labelsPerPage = $cols * ($size['rows_per_page'] ?? 999);
 $pages = $isA4 && $labelsPerPage > 0 ? array_chunk($assets, $labelsPerPage) : [$assets];
 $hMm  = (float)$size['h'];
-$qrPx = max(35, min((int)($hMm * 3.78 * 0.75), 80));
+$wMm  = (float)$size['w'];
+
+// Portrait (smal-en-lang) labels — zie print.php voor de uitleg.
+$isPortrait = $hMm > $wMm;
+$stacked    = $codeType === 'barcode' || $isPortrait;
+
+// Lettergrootte in mm, gebaseerd op de krapste afmeting — zie print.php.
+$fontBasisMm = min($wMm, $hMm);
+$fontMm = max(2.2, min(4.5, $fontBasisMm * 0.13));
+
+// QR op hoge resolutie genereren, pas daarna via CSS verkleinen — zie print.php.
+$qrPx = (int)max(300, min(900, round($fontBasisMm * 14)));
+
+// Barcode (Code128): vaste lage brongrootte zodat de beeldverhouding
+// breed-en-laag blijft — zie print.php.
+$barcodeHeightPx = 55;
+$codeFlexPct = $codeType === 'barcode' ? 58 : 42;
+
+// Streepjescode op een portrait-label: draai alleen de code-afbeelding 90°
+// binnen zijn vak — zie print.php.
+$barcodeRotate = $stacked && $codeType === 'barcode' && $isPortrait;
+$codeBoxWMm = max(8, $wMm - 3);
+$codeBoxHMm = max(8, $hMm * ($codeFlexPct / 100) - 3);
+
 $baseUrl = (isset($_SERVER['HTTPS']) ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'] . BASE_URL;
 $fname = 'labels_' . $format . '_' . date('Y-m-d') . '.html';
 
@@ -88,9 +128,10 @@ header('Content-Disposition: attachment; filename="' . $fname . '"');
 <meta charset="UTF-8">
 <title>AssetTrack Labels — <?= htmlspecialchars($size['name'] ?? $format) ?></title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.5/JsBarcode.all.min.js"></script>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
-body { font-family:Arial,Helvetica,sans-serif; font-size:<?= $size['font'] ?>; background:white; }
+body { font-family:Arial,Helvetica,sans-serif; font-size:<?= $fontMm ?>mm; background:white; }
 .info { background:#1a2332; color:white; padding:8px 12px; font-size:11pt; margin-bottom:10px; }
 .info strong { color:#60a5fa; }
 
@@ -112,14 +153,44 @@ body { font-family:Arial,Helvetica,sans-serif; font-size:<?= $size['font'] ?>; b
 <?php endif; ?>
 
 .label {
-    width:<?= $size['w'] ?>; height:<?= $size['h'] ?>;
+    width:<?= $pageW ?>; height:<?= $pageH ?>;
     border:1px solid #333; background:white;
-    display:flex; align-items:stretch;
-    padding:2px 2px 2px 3px; overflow:hidden;
+    display:flex; align-items:center; justify-content:center;
+    overflow:hidden;
     page-break-inside:avoid;
 }
+.label-inner {
+    width:<?= $size['w'] ?>; height:<?= $size['h'] ?>;
+    flex-shrink:0;
+    display:flex; align-items:stretch;
+    padding:2px 2px 2px 3px;
+    <?php if ($rotate): ?>transform:rotate(90deg);<?php endif; ?>
+}
 .label-left { flex:1; min-width:0; display:flex; flex-direction:column; justify-content:space-evenly; overflow:hidden; padding-right:2px; }
-.label-right { display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.label-right { display:flex; align-items:center; justify-content:center; flex-shrink:0; max-height:<?= $size['h'] ?>; overflow:hidden; }
+/* Let op: .label-right heeft alleen max-height (geen expliciete height) --
+   een percentage max-height op de afbeelding erin resolveert dan niet
+   betrouwbaar. Bij de gewone (niet-gestapelde) lay-out daarom een absolute
+   mm-waarde; bij .label-stacked is het oudervak wél een percentage van een
+   definitieve hoogte (flex-basis in een kolom met vaste labelhoogte) en werkt
+   100% daar wel -- zie print.php voor de volledige uitleg. */
+.label-right img { max-width:100% !important; max-height:calc(<?= $size['h'] ?> - 8px) !important; width:auto !important; height:auto !important; display:block; }
+.label-stacked .label-right img { max-height:100% !important; }
+.label-stacked .label-right svg { max-width:100% !important; max-height:100% !important; width:100% !important; height:100% !important; display:block; }
+/* Stapel-layout: tekst boven, code eronder over de volle breedte i.p.v.
+   tekst-links/code-rechts -- zie print.php voor de volledige uitleg. */
+.label-stacked { flex-direction:column; align-items:stretch; }
+.label-stacked .label-left { flex:1 1 auto; padding-right:0; min-height:0; }
+.label-stacked .label-left .lbl-main,
+.label-stacked .label-left .lbl-sub {
+    white-space:normal; overflow-wrap:break-word; text-overflow:clip;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+}
+.label-stacked .label-right { flex:0 0 <?= $codeFlexPct ?>%; max-height:none; width:100%; padding:1px 2px; }
+/* Streepjescode op een portrait-label: de code-afbeelding wordt 90° gedraaid
+   binnen zijn vak -- zie print.php voor de uitleg. */
+.barcode-rotate-wrap { width:<?= $codeBoxHMm ?>mm; height:<?= $codeBoxWMm ?>mm; transform:rotate(90deg); }
+.barcode-rotate-wrap svg { max-width:100% !important; max-height:100% !important; width:100% !important; height:100% !important; display:block; }
 .asset-nr { font-weight:700; font-size:1.25em; line-height:1.1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .lbl-main { font-size:0.9em; color:#111; line-height:1.25; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .lbl-sub  { font-size:0.8em; color:#333; line-height:1.2;  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -131,7 +202,7 @@ body { font-family:Arial,Helvetica,sans-serif; font-size:<?= $size['font'] ?>; b
     @page { size:A4; margin:0; }
     <?php else: ?>
     .a4-page { padding:0; }
-    @page { size:<?= $size['w'] ?> <?= $size['h'] ?>; margin:0; }
+    @page { size:<?= $pageW ?> <?= $pageH ?>; margin:0; }
     <?php endif; ?>
 }
 </style>
@@ -141,7 +212,7 @@ body { font-family:Arial,Helvetica,sans-serif; font-size:<?= $size['font'] ?>; b
     <strong>AssetTrack Labels</strong> — <?= htmlspecialchars($size['name'] ?? $format) ?> —
     <?= count($assets) ?> label(s), <?= count($pages) ?> pagina('s) — <?= date('d-m-Y H:i') ?><br>
     Open in browser → <strong>Ctrl+P</strong> → <strong>Opslaan als PDF</strong>
-    <?php if (!$isA4): ?> | Paginaformaat: <strong><?= $size['w'] ?> × <?= $size['h'] ?></strong><?php endif; ?>
+    <?php if (!$isA4): ?> | Paginaformaat: <strong><?= $size['w'] ?> × <?= $size['h'] ?></strong><?= $rotate ? ' (90° gedraaid)' : '' ?><?php endif; ?>
 </div>
 
 <?php
@@ -149,8 +220,9 @@ $li = 0;
 foreach ($pages as $pageAssets):
 ?>
 <div class="a4-page">
-    <?php foreach ($pageAssets as $asset): $qrId='qr_'.$li++; ?>
+    <?php foreach ($pageAssets as $asset): $codeId='code_'.$li++; ?>
     <div class="label">
+        <div class="label-inner<?= $stacked ? ' label-stacked' : '' ?>">
         <div class="label-left">
             <div class="asset-nr"><?= htmlspecialchars($asset['asset_number']) ?></div>
             <?php if ($showFields['show_company']): ?><div class="lbl-sub"><?= htmlspecialchars($companyName) ?></div><?php endif; ?>
@@ -161,20 +233,44 @@ foreach ($pages as $pageAssets):
             <?php if ($showFields['show_status'] && $asset['status']): ?><div class="lbl-sub"><?= htmlspecialchars($asset['status']) ?></div><?php endif; ?>
             <?php if ($showFields['show_ip'] && $asset['lan_ip_address']): ?><div class="lbl-sub"><?= htmlspecialchars($asset['lan_ip_address']) ?></div><?php endif; ?>
         </div>
-        <?php if ($showFields['show_qr']): ?><div class="label-right"><div id="<?= $qrId ?>"></div></div><?php endif; ?>
+        <?php if ($showFields['show_qr']): ?>
+        <div class="label-right">
+            <?php if ($codeType === 'barcode'): ?>
+                <?php if ($barcodeRotate): ?>
+                <div class="barcode-rotate-wrap"><svg id="<?= $codeId ?>"></svg></div>
+                <?php else: ?>
+                <svg id="<?= $codeId ?>"></svg>
+                <?php endif; ?>
+            <?php else: ?>
+            <div id="<?= $codeId ?>"></div>
+            <?php endif; ?>
+        </div>
+        <?php endif; ?>
+        </div>
     </div>
     <?php endforeach; ?>
 </div>
 <?php endforeach; ?>
 
 <script>
+<?php if ($codeType === 'barcode'): ?>
 <?php $i=0; foreach ($assets as $asset): ?>
-new QRCode(document.getElementById("qr_<?= $i++ ?>"),{
+try {
+    JsBarcode("#code_<?= $i++ ?>", "<?= addslashes($asset['asset_number']) ?>", {
+        format: "CODE128", displayValue: true, fontSize: <?= max(10, (int)round($barcodeHeightPx * 0.16)) ?>,
+        height: <?= $barcodeHeightPx ?>, width: 2, margin: 2
+    });
+} catch (e) { console.error('Barcode fout voor asset <?= (int)$asset['id'] ?>:', e); }
+<?php endforeach; ?>
+<?php else: ?>
+<?php $i=0; foreach ($assets as $asset): ?>
+new QRCode(document.getElementById("code_<?= $i++ ?>"),{
     text:"<?= addslashes($baseUrl.'/modules/assets/scan.php?id='.$asset['id']) ?>",
     width:<?= $qrPx ?>,height:<?= $qrPx ?>,
     colorDark:"#000000",colorLight:"#ffffff",correctLevel:QRCode.CorrectLevel.M
 });
 <?php endforeach; ?>
+<?php endif; ?>
 </script>
 </body>
 </html>

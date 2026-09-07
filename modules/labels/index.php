@@ -34,6 +34,7 @@ $labelFormats = [
         'large'         => 'Groot (89×36mm) — Zebra / generiek',
         'dymo_small'    => 'Dymo 11354 (57×32mm)',
         'dymo_medium'   => 'Dymo 99010 (89×28mm)',
+        'dymo_99012'    => 'Dymo 99012 / 99017 (36×89mm rol, automatisch gedraaid)',
         'brother_small' => 'Brother DK-11201 (29×62mm)',
         'zebra_50x25'   => 'Zebra (50×25mm)',
         'custom'        => '⚙️ Aangepast formaat...',
@@ -64,6 +65,7 @@ $maxFields = [
     'large'         => 6,
     'dymo_small'    => 4,
     'dymo_medium'   => 3,
+    'dymo_99012'    => 6,
     'brother_small' => 5,
     'zebra_50x25'   => 2,
     'custom'        => 6,
@@ -81,6 +83,17 @@ $maxFields = [
     'a4_40'         => 4,
     'a4_65'         => 3,
 ];
+
+// Formaten voor losse labelprinters (rol-labels, bv. Dymo/Brother/Zebra) --
+// alleen voor deze formaten is de afdrukrichting (90° rotatie) relevant.
+// A4-vellen liggen altijd vast in de printer, dus daar is dit niet nodig.
+$looseFormats = array_keys($labelFormats['— Losse labels (labelprinter) —']);
+
+// Formaten die altijd automatisch gedraaid worden (bv. Dymo 99012, waarvan de
+// rol fysiek smaller is dan de leesbare inhoud) -- daarvoor is het handmatige
+// vinkje overbodig/verwarrend, dus die tonen we niet.
+$autoRotateFormats = ['dymo_99012'];
+$rotatableFormats  = array_values(array_diff($looseFormats, $autoRotateFormats));
 
 $pageTitle = 'Labels afdrukken';
 include __DIR__ . '/../../templates/header.php';
@@ -225,6 +238,25 @@ include __DIR__ . '/../../templates/header.php';
                             Voer de exacte afmeting in van je label in millimeters.
                         </p>
                     </div>
+
+                    <!-- Afdrukrichting (alleen relevant voor losse labelprinters) -->
+                    <div id="rotateField" style="display:none;margin-top:10px;padding:10px;
+                         background:#f8fafc;border-radius:6px;border:1px solid #e5e7eb;">
+                        <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;">
+                            <input type="checkbox" name="rotate_label" value="1" style="margin-top:2px;">
+                            <span style="font-size:0.875rem;">
+                                Label 90° gedraaid afdrukken
+                                <br><small style="color:#6b7280;">
+                                    Gebruik dit als het label nu verkeerd om (op zijn kant) uit de printer komt.
+                                </small>
+                            </span>
+                        </label>
+                    </div>
+                    <div id="autoRotateNote" style="display:none;margin-top:10px;padding:10px;
+                         background:#eff6ff;border-radius:6px;border:1px solid #bfdbfe;
+                         font-size:0.8rem;color:#1e3a8a;">
+                        Dit label wordt automatisch gedraaid zodat het op de rol past — een handmatig vinkje is hier niet nodig.
+                    </div>
                 </div>
             </div>
 
@@ -242,11 +274,25 @@ include __DIR__ . '/../../templates/header.php';
                     <label style="display:flex;align-items:center;gap:8px;margin-bottom:5px;opacity:0.6;">
                         <input type="checkbox" checked disabled> Assetnummer <small>(altijd)</small>
                     </label>
-                    <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;opacity:0.6;">
-                        <input type="checkbox" checked disabled> QR-code <small>(altijd)</small>
-                    </label>
                     <input type="hidden" name="show_asset_number" value="1">
                     <input type="hidden" name="show_qr" value="1">
+
+                    <!-- Keuze QR-code of streepjescode -->
+                    <div style="margin-bottom:10px;">
+                        <label style="font-size:0.8rem;font-weight:600;display:block;margin-bottom:4px;">
+                            Code op label
+                        </label>
+                        <label style="display:flex;align-items:center;gap:8px;margin-bottom:4px;cursor:pointer;">
+                            <input type="radio" name="code_type" value="qr" checked>
+                            <span style="font-size:0.875rem;">QR-code
+                                <small style="color:#6b7280;">(scannen met telefoon)</small></span>
+                        </label>
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                            <input type="radio" name="code_type" value="barcode">
+                            <span style="font-size:0.875rem;">Streepjescode
+                                <small style="color:#6b7280;">(Code128, voor oudere pc-scanners)</small></span>
+                        </label>
+                    </div>
 
                     <!-- Optionele velden -->
                     <?php
@@ -288,6 +334,8 @@ include __DIR__ . '/../../templates/header.php';
 
 <script>
 const maxFieldsMap = <?= json_encode($maxFields) ?>;
+const rotatableFormats = <?= json_encode($rotatableFormats) ?>;
+const autoRotateFormats = <?= json_encode($autoRotateFormats) ?>;
 
 function toggleAll(cb) {
     document.querySelectorAll('.asset-cb').forEach(c => c.checked = cb.checked);
@@ -311,6 +359,15 @@ function updateFormatUI(format) {
     // Toon/verberg aangepast formaat velden
     document.getElementById('customSizeFields').style.display =
         format === 'custom' ? 'block' : 'none';
+
+    // Afdrukrichting alleen tonen bij losse labelprinters die dit niet al
+    // automatisch doen (A4-vellen nooit, Dymo 99012 altijd -- die is te smal
+    // voor de content en wordt sowieso gedraaid, het vinkje zou daar overbodig
+    // en verwarrend zijn).
+    document.getElementById('rotateField').style.display =
+        rotatableFormats.includes(format) ? 'block' : 'none';
+    document.getElementById('autoRotateNote').style.display =
+        autoRotateFormats.includes(format) ? 'block' : 'none';
 
     // Update veld limiet
     const max = maxFieldsMap[format] || 4;
