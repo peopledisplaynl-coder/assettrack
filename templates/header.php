@@ -132,7 +132,7 @@ $fontSlug = urlencode(preg_replace('/[^a-zA-Z0-9 ]/', '', $themeFont));
             <?php else: ?>
             <span class="loc-dot"></span>
             <?php endif; ?>
-            <?= htmlspecialchars($badgeLabel) ?>
+            <span class="location-badge-label"><?= htmlspecialchars($badgeLabel) ?></span>
             <span style="opacity:0.6;font-size:0.65rem;margin-left:2px;">▾</span>
         </button>
         <div id="locDropdown" class="location-dropdown">
@@ -168,7 +168,7 @@ $fontSlug = urlencode(preg_replace('/[^a-zA-Z0-9 ]/', '', $themeFont));
             <?php else: ?>
             <span class="loc-dot"></span>
             <?php endif; ?>
-            <?= htmlspecialchars($badgeLabel) ?>
+            <span class="location-badge-label"><?= htmlspecialchars($badgeLabel) ?></span>
         </span>
     <?php endif; ?>
     </div>

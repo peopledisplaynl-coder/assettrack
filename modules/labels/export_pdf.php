@@ -50,6 +50,11 @@ $formats = [
     'large'         => ['w'=>'89mm',   'h'=>'36mm',   'font'=>'8pt', 'a4'=>false, 'name'=>'Groot 89x36mm'],
     'dymo_small'    => ['w'=>'57mm',   'h'=>'32mm',   'font'=>'7pt', 'a4'=>false, 'name'=>'Dymo 57x32mm'],
     'dymo_medium'   => ['w'=>'89mm',   'h'=>'28mm',   'font'=>'7pt', 'a4'=>false, 'name'=>'Dymo 89x28mm'],
+    // Dymo 11355: "19 x 51mm (BxL)" -- de rol is fysiek maar 19mm breed (net als
+    // de 99012-rol 36mm breed is), dus net als bij dymo_99012 hieronder wordt de
+    // inhoud breed opgemaakt (51x19) en via force_rotate altijd gedraaid om op
+    // de smalle rol te passen -- zie print.php voor de volledige uitleg.
+    'dymo_11355'    => ['w'=>'51mm',   'h'=>'19mm',   'font'=>'6pt', 'a4'=>false, 'name'=>'Dymo 11355 (51x19mm)', 'force_rotate'=>true],
     // Dymo 99012/99017: inhoud bewust "breed" opgemaakt (89x36, net als 'large')
     // voor voldoende schrijfruimte, en via force_rotate altijd gedraaid om op de
     // fysiek 36mm-brede rol te passen — zie print.php voor de volledige uitleg.
@@ -109,6 +114,17 @@ $qrPx = (int)max(300, min(900, round($fontBasisMm * 14)));
 // breed-en-laag blijft — zie print.php.
 $barcodeHeightPx = 55;
 $codeFlexPct = $codeType === 'barcode' ? 58 : 42;
+// Aandeel van de labelBREEDTE gereserveerd voor de code bij de NIET-gestapelde
+// (naast-elkaar) layout -- fix voor de te-grote-QR/afgekapte-tekst bug, zie
+// de uitgebreide toelichting in print.php bij dezelfde variabele. AANVULLING
+// (2026-09-08): schaalt af op basis van de daadwerkelijke lettergrootte
+// ($fontMm), niet alleen de breedte -- zie de uitgebreide toelichting in
+// print.php bij dezelfde variabele voor waarom breedte-alleen niet volstond.
+$assetNrFontMm = $fontMm * 1.25;
+$estCharWidthMm = $assetNrFontMm * 0.62;
+$neededTextMm = 12 * $estCharWidthMm + 2;
+$maxCodeMm = max(8, $wMm - $neededTextMm);
+$sideCodeFlexPct = (int) max(20, min(38, round($maxCodeMm / $wMm * 100)));
 
 // Streepjescode op een portrait-label: draai alleen de code-afbeelding 90°
 // binnen zijn vak — zie print.php.
@@ -167,15 +183,14 @@ body { font-family:Arial,Helvetica,sans-serif; font-size:<?= $fontMm ?>mm; backg
     <?php if ($rotate): ?>transform:rotate(90deg);<?php endif; ?>
 }
 .label-left { flex:1; min-width:0; display:flex; flex-direction:column; justify-content:space-evenly; overflow:hidden; padding-right:2px; }
-.label-right { display:flex; align-items:center; justify-content:center; flex-shrink:0; max-height:<?= $size['h'] ?>; overflow:hidden; }
-/* Let op: .label-right heeft alleen max-height (geen expliciete height) --
-   een percentage max-height op de afbeelding erin resolveert dan niet
-   betrouwbaar. Bij de gewone (niet-gestapelde) lay-out daarom een absolute
-   mm-waarde; bij .label-stacked is het oudervak wél een percentage van een
-   definitieve hoogte (flex-basis in een kolom met vaste labelhoogte) en werkt
-   100% daar wel -- zie print.php voor de volledige uitleg. */
-.label-right img { max-width:100% !important; max-height:calc(<?= $size['h'] ?> - 8px) !important; width:auto !important; height:auto !important; display:block; }
-.label-stacked .label-right img { max-height:100% !important; }
+.label-right { display:flex; align-items:center; justify-content:center; flex:0 0 <?= $sideCodeFlexPct ?>%; max-width:<?= $sideCodeFlexPct ?>%; max-height:calc(<?= $size['h'] ?> - 6px); padding:2px 3px 2px 2px; overflow:hidden; }
+/* .label-right heeft nu een VASTE, beperkte breedte (flex-basis + max-width)
+   EN een hoogtelimiet, zodat de QR-afbeelding er nooit meer uit kan groeien
+   dan bedoeld -- fix voor de te-grote-QR/afgekapte-tekst bug. Zie print.php
+   voor de volledige toelichting. Omdat het vak nu een DEFINITIEVE breedte
+   heeft (i.p.v. "fit-content"), resolvet 100% op de afbeelding erin nu wel
+   betrouwbaar. */
+.label-right img { max-width:100% !important; max-height:100% !important; width:auto !important; height:auto !important; display:block; }
 .label-stacked .label-right svg { max-width:100% !important; max-height:100% !important; width:100% !important; height:100% !important; display:block; }
 /* Stapel-layout: tekst boven, code eronder over de volle breedte i.p.v.
    tekst-links/code-rechts -- zie print.php voor de volledige uitleg. */
@@ -186,7 +201,7 @@ body { font-family:Arial,Helvetica,sans-serif; font-size:<?= $fontMm ?>mm; backg
     white-space:normal; overflow-wrap:break-word; text-overflow:clip;
     display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
 }
-.label-stacked .label-right { flex:0 0 <?= $codeFlexPct ?>%; max-height:none; width:100%; padding:1px 2px; }
+.label-stacked .label-right { flex:0 0 <?= $codeFlexPct ?>%; max-width:none; max-height:none; width:100%; padding:1px 2px; }
 /* Streepjescode op een portrait-label: de code-afbeelding wordt 90° gedraaid
    binnen zijn vak -- zie print.php voor de uitleg. */
 .barcode-rotate-wrap { width:<?= $codeBoxHMm ?>mm; height:<?= $codeBoxWMm ?>mm; transform:rotate(90deg); }

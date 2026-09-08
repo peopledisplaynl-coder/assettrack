@@ -654,6 +654,28 @@ function getDashboardStats(): array {
 }
 
 function getRecentActivity(int $limit = 10): array {
+    // Net als getDashboardStats() hierboven: een superadmin (geen vaste locatie)
+    // ziet alles, een gewone gebruiker mag alleen activiteit zien die bij zijn
+    // EIGEN locatie hoort. audit_log zelf heeft geen location_id-kolom (logt
+    // generiek over meerdere tabellen), dus we koppelen hier specifiek aan de
+    // assets-tabel om te bepalen bij welke locatie een wijziging hoort. Zonder
+    // deze filter zag een gebruiker van locatie B ook wijzigingen die een
+    // admin voor locatie A had doorgevoerd — een privacyprobleem, gemeld door
+    // de gebruiker op 2026-09-08.
+    if (getRole() !== 'superadmin') {
+        $locationId = getLocationId();
+        if (!$locationId) {
+            return [];
+        }
+        return query(
+            "SELECT al.*, u.username FROM audit_log al
+             LEFT JOIN users u ON al.user_id = u.id
+             INNER JOIN assets a ON al.table_name = 'assets' AND al.record_id = a.id
+             WHERE a.location_id = ?
+             ORDER BY al.created_at DESC LIMIT ?",
+            [$locationId, $limit]
+        );
+    }
     return query("SELECT al.*, u.username FROM audit_log al
                   LEFT JOIN users u ON al.user_id = u.id
                   ORDER BY al.created_at DESC LIMIT ?", [$limit]);

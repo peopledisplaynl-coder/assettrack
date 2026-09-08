@@ -76,6 +76,15 @@ main {
     font-family: var(--font-base, 'DM Sans', sans-serif);
 }
 .location-badge:hover { background: rgba(255,255,255,0.2); }
+/* Beschermt de navbalk tegen een erg lange locatie-/organisatienaam (bv.
+   "Willibrordusschool") die anders de nav-items rechts van het scherm zou
+   duwen op een laptop-breedte scherm -- kapt netjes af met "...". */
+.location-badge-label {
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
 .location-badge.has-color {
     background: var(--loc-color, var(--color-primary, #2563eb));
     border-color: transparent;
@@ -125,28 +134,28 @@ main {
 }
 
 /* Navigation */
-.main-nav { flex: 1; display: flex; justify-content: center; }
-.main-nav ul { display: flex; list-style: none; gap: 2px; align-items: center; }
+.main-nav { flex: 1; min-width: 0; display: flex; justify-content: center; }
+.main-nav ul { display: flex; list-style: none; gap: 4px; align-items: center; }
 .main-nav a {
     display: flex;
     align-items: center;
     gap: 6px;
-    color: rgba(255,255,255,0.65);
+    color: rgba(255,255,255,0.68);
     text-decoration: none;
-    padding: 6px 11px;
+    padding: 7px 12px;
     border-radius: 8px;
-    font-size: 0.82rem;
-    font-weight: 500;
+    font-size: 0.85rem;
+    font-weight: 600;
     transition: all 0.12s;
     white-space: nowrap;
 }
-.main-nav a:hover { color: white; background: rgba(255,255,255,0.1); }
+.main-nav a:hover { color: white; background: rgba(255,255,255,0.12); }
 .main-nav a.active {
     color: white;
     background: var(--color-primary, #2563eb);
     box-shadow: 0 2px 8px rgba(37,99,235,0.4);
 }
-.nav-icon { font-size: 1rem; line-height: 1; }
+.nav-icon { font-size: 1.02rem; line-height: 1; }
 
 /* User area */
 .header-user {
@@ -191,7 +200,19 @@ main {
 }
 
 /* ── Layout ─────────────────────────────────────────────────────── */
+/* BUG (2026-09-08, gemeld door gebruiker): "main" is een flex-item van
+   "body" (display:flex; flex-direction:column). Met alleen "margin:0 auto"
+   en zonder expliciete breedte schakelt de browser de standaard
+   stretch-uitlijning UIT (auto-marges op de kruisas overschrijven
+   align-items:stretch) en krimpt "main" naar de eigen content-breedte
+   i.p.v. de beschikbare ruimte (tot max-width) te vullen. Op pagina's met
+   een CSS-grid met "auto-fill" kolommen (Instellingen, Rapporten) viel dit
+   extra hard op: die grids kropen dan terug naar maar 1-2 kolommen op een
+   brede laptop/desktop, met veel ongebruikte witruimte ernaast. Fix:
+   expliciete width:100% zodat "main" altijd de volle beschikbare breedte
+   gebruikt tot aan max-width, en daarna keurig centreert via margin:auto. */
 main {
+    width: 100%;
     max-width: 1280px;
     margin: 0 auto;
     padding: 24px 20px;
@@ -395,14 +416,84 @@ textarea.form-control { resize: vertical; min-height: 100px; }
     flex-shrink: 0;
     background: rgba(37,99,235,0.1);
 }
-.stat-value { font-size: 1.75rem; font-weight: 700; line-height: 1; letter-spacing: -0.03em; }
-.stat-label { font-size: 0.82rem; color: #64748b; font-weight: 500; margin-top: 2px; }
+/* Waarschuwing/gevaar-varianten van de stat-kaart -- zelfde kleurtaal als
+   .badge-warning/.badge-danger, zodat "Vervangen binnen 6 maanden" en
+   "Verlopen Garanties" ook echt opvallen i.p.v. identiek aan de neutrale
+   kaarten eronder te ogen. */
+.stat-card.warning .stat-icon { background: #fef3c7; }
+.stat-card.danger  .stat-icon { background: #fee2e2; }
+
+.stat-value, .stat-content h3 { font-size: 1.75rem; font-weight: 700; line-height: 1; letter-spacing: -0.03em; }
+.stat-label, .stat-content p  { font-size: 0.82rem; color: #64748b; font-weight: 500; margin-top: 2px; }
+
+/* ── Recente activiteit (dashboard) ─────────────────────────────────
+   Deze lijst had voorheen helemaal geen eigen styling -- renderde als
+   kale, onopgemaakte tekst naast de wél opgemaakte stat-kaarten erboven.
+   Nu in dezelfde kaart-taal als de rest van de pagina. */
+.activity-list {
+    background: white;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    overflow: hidden;
+}
+.activity-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 14px 18px;
+    border-bottom: 1px solid #f1f5f9;
+    transition: background 0.1s;
+}
+.activity-item:last-child { border-bottom: none; }
+.activity-item:hover { background: #f8fafc; }
+.activity-icon {
+    width: 34px; height: 34px;
+    border-radius: 10px;
+    background: #f1f5f9;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1rem;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+.activity-content { min-width: 0; }
+.activity-content p { color: #0f172a; font-size: 0.85rem; line-height: 1.5; }
+.activity-content small { color: #94a3b8; font-size: 0.75rem; }
+.activity-list .no-data {
+    padding: 24px 18px;
+    text-align: center;
+    color: #94a3b8;
+    font-size: 0.85rem;
+}
 
 /* ── Responsive ──────────────────────────────────────────────────── */
-@media (max-width: 900px) {
+/* GEVONDEN TIJDENS ONDERZOEK (2026-09-08): op een gewone laptopbreedte
+   (1280-1600px) paste de horizontale desktop-navbalk in werkelijkheid al
+   NIET meer -- de combinatie van logo + app-naam + locatie-badge + alle 8
+   menu-items + gebruikersnaam duwde de uitlogknop letterlijk van het
+   scherm af. Dit bestond al VOOR deze wijzigingsronde (bevestigd door de
+   ongewijzigde CSS ook te meten); de klacht "op desktop/laptop mag het
+   duidelijker" is hier dus zeer waarschijnlijk een symptoom van. Eerst
+   wordt hier, op middelgrote breedtes, wat ruimte teruggewonnen door de
+   app-naam/gebruikersnaam te verbergen (het icoon/de knop blijft
+   zichtbaar); zie de her-berekende hamburger-drempel verderop voor waar
+   dat niet genoeg is. */
+@media (max-width: 1700px) {
+    .header-logo-text { display: none; }
+    .header-username { display: none; }
+    .location-badge-label { max-width: 110px; }
+}
+@media (max-width: 1300px) {
     .main-nav { display: none; }
+    /* De items vullen samen de volle beschikbare hoogte van het menu-scherm
+       (i.p.v. compact bovenaan te blijven staan met veel lege ruimte
+       eronder, zoals de gebruiker liet zien) -- elk item krijgt evenveel
+       hoogte via flex:1, met een boven- en ondergrens zodat het bij weinig
+       menu-items (smalle rechtenset) niet absurd groot wordt, en bij heel
+       veel items (brede rechtenset, klein scherm) nog steeds prettig
+       blijft scrollen. */
     .main-nav.open {
-        display: block;
+        display: flex;
+        flex-direction: column;
         position: fixed;
         top: 60px; left: 0; right: 0; bottom: 0;
         background: var(--color-secondary, #1a2332);
@@ -410,12 +501,29 @@ textarea.form-control { resize: vertical; min-height: 100px; }
         padding: 12px;
         overflow-y: auto;
     }
-    .main-nav.open ul { flex-direction: column; gap: 2px; }
-    .main-nav.open a {
-        padding: 12px 16px;
-        font-size: 0.95rem;
-        border-radius: 8px;
+    .main-nav.open ul {
+        flex-direction: column;
+        gap: 0;
+        flex: 1;
     }
+    .main-nav.open li {
+        flex: 1 1 0;
+        min-height: 64px;
+        max-height: 130px;
+        display: flex;
+        border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .main-nav.open li:last-child { border-bottom: none; }
+    .main-nav.open a {
+        width: 100%;
+        height: 100%;
+        padding: 0 20px;
+        font-size: clamp(1.05rem, 4.2vw, 1.5rem);
+        font-weight: 600;
+        border-radius: 10px;
+        gap: 18px;
+    }
+    .main-nav.open .nav-icon { font-size: clamp(1.3rem, 5.4vw, 2rem); width: 1.3em; text-align: center; }
     .hamburger { display: flex; }
     .header-username { display: none; }
     main { padding: 16px; }
