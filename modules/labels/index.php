@@ -35,6 +35,7 @@ $labelFormats = [
         'dymo_small'    => 'Dymo 11354 (57×32mm)',
         'dymo_medium'   => 'Dymo 99010 (89×28mm)',
         'dymo_99012'    => 'Dymo 99012 / 99017 (36×89mm rol, automatisch gedraaid)',
+        'dymo_11355'    => 'Dymo 11355 (19×51mm rol, automatisch gedraaid) — minimalistisch: alleen assetnummer + code',
         'brother_small' => 'Brother DK-11201 (29×62mm)',
         'zebra_50x25'   => 'Zebra (50×25mm)',
         'custom'        => '⚙️ Aangepast formaat...',
@@ -66,6 +67,9 @@ $maxFields = [
     'dymo_small'    => 4,
     'dymo_medium'   => 3,
     'dymo_99012'    => 6,
+    // Dymo 11355 is bewust het "minimalistische" formaat: alleen assetnummer +
+    // code (QR of streepjescode), geen ruimte voor extra velden.
+    'dymo_11355'    => 0,
     'brother_small' => 5,
     'zebra_50x25'   => 2,
     'custom'        => 6,
@@ -89,10 +93,11 @@ $maxFields = [
 // A4-vellen liggen altijd vast in de printer, dus daar is dit niet nodig.
 $looseFormats = array_keys($labelFormats['— Losse labels (labelprinter) —']);
 
-// Formaten die altijd automatisch gedraaid worden (bv. Dymo 99012, waarvan de
-// rol fysiek smaller is dan de leesbare inhoud) -- daarvoor is het handmatige
-// vinkje overbodig/verwarrend, dus die tonen we niet.
-$autoRotateFormats = ['dymo_99012'];
+// Formaten die altijd automatisch gedraaid worden (rollen waarvan de fysieke
+// breedte smaller is dan de leesbare inhoud, zoals Dymo 99012 en Dymo 11355)
+// -- daarvoor is het handmatige vinkje overbodig/verwarrend, dus die tonen we
+// niet.
+$autoRotateFormats = ['dymo_99012', 'dymo_11355'];
 $rotatableFormats  = array_values(array_diff($looseFormats, $autoRotateFormats));
 
 $pageTitle = 'Labels afdrukken';
@@ -369,11 +374,24 @@ function updateFormatUI(format) {
     document.getElementById('autoRotateNote').style.display =
         autoRotateFormats.includes(format) ? 'block' : 'none';
 
-    // Update veld limiet
-    const max = maxFieldsMap[format] || 4;
+    // Update veld limiet. Let op: "?? 4" i.p.v. "|| 4" -- een formaat met max 0
+    // (zoals de minimalistische Dymo 11355) is anders een valse 0, en JS's "||"
+    // zou die ten onrechte vervangen door de standaardwaarde 4.
+    const max = maxFieldsMap[format] ?? 4;
     const cbs = document.querySelectorAll('.field-cb');
     const hint = document.getElementById('maxFieldsHint');
-    hint.textContent = 'Max ' + max + ' extra veld(en) voor dit formaat.';
+    hint.textContent = max === 0
+        ? 'Dit formaat is bewust minimalistisch: alleen assetnummer + code, geen ruimte voor extra velden.'
+        : 'Max ' + max + ' extra veld(en) voor dit formaat.';
+
+    // Als er (bv. door een eerder formaat, of onthouden instellingen) meer velden
+    // aangevinkt staan dan deze nieuwe limiet toelaat, zet de teveel aangevinkte
+    // velden automatisch uit i.p.v. alleen te waarschuwen -- anders blijft een
+    // "minimalistisch" formaat zoals de 11355 niet echt minimaal.
+    const checkedCbs = Array.from(cbs).filter(cb => cb.checked);
+    if (checkedCbs.length > max) {
+        checkedCbs.slice(max).forEach(cb => { cb.checked = false; });
+    }
 
     let checked = Array.from(cbs).filter(cb => cb.checked).length;
     cbs.forEach(cb => {
@@ -403,8 +421,70 @@ document.querySelectorAll('.field-cb').forEach(cb => {
     });
 });
 
-// Init
-updateFormatUI('medium');
+// Onthoud de laatst gebruikte labelinstellingen in de browser (localStorage),
+// zodat je bij een volgende printopdracht niet steeds opnieuw formaat, code-type
+// en velden hoeft in te stellen. Dit is per browser/apparaat, niet gekoppeld aan
+// het gebruikersaccount -- alles blijft lokaal, er wordt niets naar de server
+// gestuurd of in de database opgeslagen.
+const LABEL_PREFS_KEY = 'assettrack_label_prefs_v1';
+
+function saveLabelPrefs() {
+    try {
+        const fields = {};
+        document.querySelectorAll('.field-cb').forEach(cb => { fields[cb.name] = cb.checked; });
+        const prefs = {
+            format:   document.querySelector('input[name="format"]:checked')?.value || null,
+            codeType: document.querySelector('input[name="code_type"]:checked')?.value || null,
+            rotate:   document.querySelector('input[name="rotate_label"]')?.checked || false,
+            customW:  document.getElementById('custom_w')?.value || null,
+            customH:  document.getElementById('custom_h')?.value || null,
+            fields,
+        };
+        localStorage.setItem(LABEL_PREFS_KEY, JSON.stringify(prefs));
+    } catch (e) {
+        // localStorage niet beschikbaar (bv. privénavigatie) -- gewoon negeren,
+        // instellingen worden dan simpelweg niet onthouden.
+    }
+}
+
+function loadLabelPrefs() {
+    try {
+        const raw = localStorage.getItem(LABEL_PREFS_KEY);
+        if (!raw) return;
+        const prefs = JSON.parse(raw);
+
+        if (prefs.format) {
+            const radio = document.querySelector('input[name="format"][value="' + prefs.format + '"]');
+            if (radio) radio.checked = true;
+        }
+        if (prefs.codeType) {
+            const radio = document.querySelector('input[name="code_type"][value="' + prefs.codeType + '"]');
+            if (radio) radio.checked = true;
+        }
+        const rotateCb = document.querySelector('input[name="rotate_label"]');
+        if (rotateCb) rotateCb.checked = !!prefs.rotate;
+        if (prefs.customW) { const el = document.getElementById('custom_w'); if (el) el.value = prefs.customW; }
+        if (prefs.customH) { const el = document.getElementById('custom_h'); if (el) el.value = prefs.customH; }
+        if (prefs.fields) {
+            document.querySelectorAll('.field-cb').forEach(cb => {
+                if (Object.prototype.hasOwnProperty.call(prefs.fields, cb.name)) {
+                    cb.checked = prefs.fields[cb.name];
+                }
+            });
+        }
+    } catch (e) {
+        // Kapotte/onleesbare opgeslagen data -- gewoon negeren en met de
+        // standaardinstellingen verdergaan.
+    }
+}
+
+document.getElementById('labelForm').addEventListener('submit', saveLabelPrefs);
+
+// Init: eerst eventueel onthouden instellingen herstellen, en pas dan de UI
+// (max. velden, aangepast-formaat-velden, afdrukrichting) bijwerken op basis
+// van het uiteindelijk geselecteerde formaat.
+loadLabelPrefs();
+updateFormatUI(document.querySelector('input[name="format"]:checked')?.value || 'medium');
 </script>
 
 <?php include __DIR__ . '/../../templates/footer.php'; ?>

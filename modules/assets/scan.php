@@ -3,6 +3,25 @@ require_once __DIR__ . '/../../includes/db.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/functions.php';
 
+// PRIVACY (gemeld door de gebruiker op 2026-09-08): deze pagina toonde
+// voorheen assetgegevens aan IEDEREEN die de QR-code/link opende, ook zonder
+// in te loggen -- isLoggedIn() werd alleen gebruikt om een paar EXTRA velden
+// (zoals "In gebruik bij") te verbergen, niet om de kerngegevens (status,
+// assetnummer, merk, model, ruimte, locatie) af te schermen. Dat mag niet:
+// wie niet is ingelogd mag helemaal geen assetgegevens te zien krijgen. Bij
+// een niet-ingelogde bezoeker onthouden we welke scan-URL het was en sturen
+// we door naar de inlogpagina; na een geslaagde login komt de gebruiker
+// automatisch terug op precies dit device (zie index.php).
+if (!isLoggedIn()) {
+    $requestUri = $_SERVER['REQUEST_URI'] ?? '';
+    // Alleen een relatief, same-site pad onthouden -- nooit een extern adres.
+    if ($requestUri !== '' && $requestUri[0] === '/') {
+        $_SESSION['redirect_after_login'] = $requestUri;
+    }
+    header('Location: ' . BASE_URL . '/index.php');
+    exit;
+}
+
 $asset = null;
 $error = null;
 $id = (int)($_GET['id'] ?? 0);
@@ -41,7 +60,18 @@ $assetTitle = $asset['asset_number'] ?? 'AssetTrack';
         .mobile-shell { min-height: 100vh; display: flex; flex-direction: column; }
         .topbar { background: #1a2332; color: white; padding: 16px 18px; display: flex; align-items: center; justify-content: space-between; }
         .topbar a { color: white; text-decoration: none; font-weight: 600; }
-        .content { padding: 20px; flex: 1; }
+        /* BUG (2026-09-08): deze pagina laadt ook de gedeelde assets/css/style.css,
+           die een algemene "main { max-width:1280px; margin:0 auto; }"-regel
+           bevat. Omdat <main class="content"> hier ook een <main>-element is,
+           gold die regel ONGEWILD ook hier -- en door dezelfde flex/auto-marge
+           eigenaardigheid als bij Instellingen/Rapporten kromp de content op
+           mobiel terug naar een smal kolommetje met veel witruimte ernaast,
+           i.p.v. de volle telefoonbreedte te gebruiken. Expliciet override: op
+           mobiel/telefoonbreedte vult .content de volle breedte; op een breder
+           scherm (iemand opent de scanlink toevallig op een laptop) blijft het
+           net als een telefoonkaart gecentreerd i.p.v. eindeloos breed uit te
+           rekken. */
+        .content { width: 100%; max-width: 480px; margin: 0 auto; padding: 20px; flex: 1; }
         .card { background: white; border-radius: 18px; box-shadow: 0 10px 30px rgba(15,23,42,0.08); padding: 20px; margin-bottom: 18px; }
         .status-badge { display: inline-flex; padding: 10px 14px; border-radius: 999px; font-weight: 700; color: white; margin-bottom: 18px; }
         .status-In\ gebruik { background: #10b981; }

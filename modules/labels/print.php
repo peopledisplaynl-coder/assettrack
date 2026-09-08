@@ -55,6 +55,16 @@ $formats = [
     'large'         => ['w'=>'89mm',   'h'=>'36mm',   'font'=>'8px', 'a4'=>false],
     'dymo_small'    => ['w'=>'57mm',   'h'=>'32mm',   'font'=>'7px', 'a4'=>false],
     'dymo_medium'   => ['w'=>'89mm',   'h'=>'28mm',   'font'=>'7px', 'a4'=>false],
+    // Dymo 11355: "19 x 51mm (BxL)" volgens Dymo's eigen opgave -- dat is Breedte
+    // x Lengte, dus de ROL is fysiek maar 19mm breed (net als de 99012-rol 36mm
+    // breed is), niet een los, standaand-breed label zoals dymo_small/medium.
+    // Daarom hier -- net als bij dymo_99012 -- de INHOUD toch breed opmaken
+    // (51x19, royale 51mm schrijfruimte) en via force_rotate altijd 90° draaien
+    // om op de smalle rol te passen. Zonder force_rotate probeert de browser/
+    // printerdriver dit 51mm-brede label op een 19mm-brede rol te persen, met
+    // een afgekapte QR-code en tekst tot gevolg (bevestigd door een testprint
+    // van de gebruiker op 2026-09-08).
+    'dymo_11355'    => ['w'=>'51mm',   'h'=>'19mm',   'font'=>'6px', 'a4'=>false, 'force_rotate'=>true],
     // Dymo 99012/99017: de rol is fysiek 36mm breed x 89mm lang, maar de INHOUD
     // wordt bewust "breed" (89x36, net als 'large') opgemaakt -- net zoveel
     // schrijfruimte voor tekst als bij de andere Dymo-formaten -- en daarna via
@@ -158,6 +168,47 @@ $barcodeHeightPx = 55;
 // Aandeel van de labelhoogte gereserveerd voor de code bij een gestapelde
 // layout: een streepjescode heeft meer ruimte nodig dan een QR-code.
 $codeFlexPct = $codeType === 'barcode' ? 58 : 42;
+
+// Aandeel van de labelBREEDTE gereserveerd voor de code bij de NIET-gestapelde
+// (naast-elkaar) layout -- dit gebeurt alleen bij een QR-code op een liggend
+// (niet-portrait) label, zie $stacked hierboven. BUG (opgelost op 2026-09-08):
+// .label-right had voorheen GEEN eigen breedtebeperking, alleen de <img> erin
+// had een max-height. Omdat .label-right als flex-item zonder eigen breedte
+// zich naar zijn INHOUD voegt ("fit-content"), en de QR-afbeelding vierkant is,
+// werd .label-right dus net zo BREED als hij mocht worden HOOG (bijna de volle
+// labelhoogte) -- op een liggend label (breder dan hoog) at de QR-code zo
+// veruit meer dan de helft van de labelbreedte op, met een veel te grote/
+// afgesneden QR-code en afgekapte tekst tot gevolg. Dit trad op bij VRIJWEL
+// ALLE liggende formaten (alle A4-rasters, en de meeste losse labels), precies
+// zoals de gebruiker meldde ("de QR code is te groot, welk label je ook
+// kiest"). Fix: .label-right krijgt nu een VASTE, beperkte breedte (percentage
+// van de labelbreedte, net als $codeFlexPct dat al deed voor de hoogte bij de
+// gestapelde layout) zodat er altijd ruim plek overblijft voor de tekst.
+//
+// AANVULLING (2026-09-08, na een echte testprint met echte assetnummers zoals
+// "NUW-BEST-13"): op het KLEINSTE formaat (a4_65, 38,1mm breed) bleek zelfs
+// met alleen het assetnummer erop (geen enkel ander veld) een deel van de
+// nummers nog afgekapt te worden -- 38% is prima op een ruim label, maar op
+// zo'n smal label eet elke extra mm voor de QR-code direct in bij de tekst.
+//
+// Een eerste poging om dit alleen op basis van de labelBREEDTE af te laten
+// schalen bleek niet genoeg: de lettergrootte ($fontMm hierboven) is namelijk
+// gebaseerd op de KRAPSTE afmeting (breedte ÉN hoogte), dus een format met een
+// vergelijkbare breedte maar een grotere hoogte (bv. 'small', 38x25mm) krijgt
+// juist een GROTERE letter -- die heeft dus MEER breedte nodig, niet minder.
+// Een op-breedte-alleen-formule hield daar geen rekening mee en loste dat
+// geval niet op. Daarom nu een schatting die uitgaat van de daadwerkelijke
+// lettergrootte: hoeveel mm heeft een assetnummer van ~12 tekens (ruim
+// genoeg voor bv. "NUW-BEST-144") nodig bij DEZE $fontMm, en hoeveel blijft
+// er dan over voor de QR-code? 0,62 is een vuistregel voor de gemiddelde
+// tekenbreedte-verhouding van een vet, hoofdletter-zwaar lettertype (Arial
+// bold) t.o.v. de fontgrootte -- empirisch getoetst aan echte gerenderde
+// tekstbreedtes in de testomgeving.
+$assetNrFontMm = $fontMm * 1.25; // .asset-nr is 1.25em
+$estCharWidthMm = $assetNrFontMm * 0.62;
+$neededTextMm = 12 * $estCharWidthMm + 2; // +2mm speling voor padding/rand
+$maxCodeMm = max(8, $wMm - $neededTextMm); // nooit kleiner dan 8mm, anders onscanbaar
+$sideCodeFlexPct = (int) max(20, min(38, round($maxCodeMm / $wMm * 100)));
 
 // Zelfs de volle labelbreedte is op een portrait-label (bv. 36mm) vaak te
 // weinig voor een leesbare streepjescode. In dat geval draaien we alleen de
@@ -269,28 +320,25 @@ body { font-family: Arial, Helvetica, sans-serif; background:#f3f4f6; font-size:
 }
 .label-right {
     display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0;
+    flex: 0 0 <?= $sideCodeFlexPct ?>%;
+    max-width: <?= $sideCodeFlexPct ?>%;
+    max-height: calc(<?= $size['h'] ?> - 6px);
     padding: 2px 3px 2px 2px;
-    max-height: <?= $size['h'] ?>;
     overflow: hidden;
 }
-/* Let op: .label-right zelf heeft alleen max-height (geen expliciete height) --
-   een percentage max-height op de afbeelding erin (bv. 100%) resolveert dan
-   NIET betrouwbaar (blijft "auto"/onbeperkt), ook al wordt het vak zelf via
-   align-items:stretch wel degelijk op de juiste hoogte getoond. Bij de gewone
-   (niet-gestapelde) lay-out gebruiken we daarom een absolute mm-waarde i.p.v.
-   een percentage. Bij .label-stacked hieronder is het ouder-vak wél een
-   percentage van een DEFINITIEVE hoogte (flex-basis in een kolom met een vaste
-   labelhoogte), en werkt 100% daar wel betrouwbaar. */
+/* .label-right heeft nu een VASTE, beperkte breedte (flex-basis + max-width,
+   percentage van de labelbreedte -- zie $sideCodeFlexPct hierboven) EN een
+   hoogtelimiet, zodat de QR-afbeelding er nooit meer uit kan groeien dan
+   bedoeld. Omdat het vak zelf nu een DEFINITIEVE breedte heeft (i.p.v.
+   "fit-content"), resolvet een percentage op de afbeelding erin (100%) nu wel
+   betrouwbaar -- vandaar 100%/100% hieronder i.p.v. de vorige, foutgevoelige
+   absolute mm-berekening. */
 .label-right img {
     max-width: 100% !important;
-    max-height: calc(<?= $size['h'] ?> - 8px) !important;
+    max-height: 100% !important;
     width: auto !important;
     height: auto !important;
     display: block;
-}
-.label-stacked .label-right img {
-    max-height: 100% !important;
 }
 .label-stacked .label-right svg {
     max-width: 100% !important;
@@ -315,6 +363,7 @@ body { font-family: Arial, Helvetica, sans-serif; background:#f3f4f6; font-size:
 }
 .label-stacked .label-right {
     flex: 0 0 <?= $codeFlexPct ?>%;
+    max-width: none;
     max-height: none;
     width: 100%;
     padding: 1px 2px;

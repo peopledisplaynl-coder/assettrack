@@ -40,7 +40,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if (empty($errors)) {
             if (login($username, $password)) {
-                header('Location: ' . BASE_URL . '/select_location.php');
+                // Kwam de gebruiker hier via een niet-ingelogde scan van een
+                // QR-code/label (zie modules/assets/scan.php)? Dan sturen we
+                // na het inloggen terug naar precies dat device i.p.v. altijd
+                // naar de locatiekeuze -- zo hoeft niemand opnieuw te scannen.
+                $redirect = BASE_URL . '/select_location.php';
+                if (!empty($_SESSION['redirect_after_login'])) {
+                    $redirect = $_SESSION['redirect_after_login'];
+                }
+                unset($_SESSION['redirect_after_login']);
+                header('Location: ' . $redirect);
                 exit;
             } else {
                 $errors[] = 'Gebruikersnaam of wachtwoord is onjuist.';
