@@ -493,6 +493,18 @@ function validateAssetRow(array $data, int $locationId): array {
         $warnings[] = "Assetnummer is leeg, wordt auto-gegenereerd";
     }
 
+    // Valideer serienummer uniciteit (tegen reeds bestaande assets in de database)
+    if (!empty($data['serial_number'])) {
+        $existingSerial = queryOne(
+            "SELECT id, asset_number FROM assets WHERE serial_number = ?",
+            [$data['serial_number']]
+        );
+        if ($existingSerial) {
+            $errors[] = "Serienummer '" . $data['serial_number'] . "' bestaat al bij asset "
+                . $existingSerial['asset_number'] . '.';
+        }
+    }
+
     if (empty($data['brand']))  $warnings[] = 'Merk is leeg, wordt leeg gelaten.';
     if (empty($data['model']))  $warnings[] = 'Model is leeg, wordt leeg gelaten.';
 
