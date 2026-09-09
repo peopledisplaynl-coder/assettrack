@@ -149,6 +149,23 @@ elseif ($step === 3) {
         $validationResults[$idx] = validateAssetRow($mappedData, $importLocationId);
     }
 
+    // Detecteer dubbele serienummers binnen dezelfde CSV-batch (validateAssetRow ziet
+    // alleen wat al in de database staat, niet de andere rijen in dit bestand)
+    $seenSerials = [];
+    foreach ($csvData as $idx => $row) {
+        if (!$validationResults[$idx]['valid']) continue;
+        $serial = trim((string)($validationResults[$idx]['data']['serial_number'] ?? ''));
+        if ($serial === '') continue;
+        $key = mb_strtolower($serial);
+        if (isset($seenSerials[$key])) {
+            $firstRowNumber = $seenSerials[$key] + 1;
+            $validationResults[$idx]['valid'] = false;
+            $validationResults[$idx]['errors'][] = "Serienummer '$serial' komt ook voor bij rij $firstRowNumber in dit bestand.";
+        } else {
+            $seenSerials[$key] = $idx;
+        }
+    }
+
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) {
             $errors[] = 'Ongeldige CSRF token.';
