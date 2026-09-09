@@ -154,6 +154,7 @@ elseif ($step === 3) {
             $errors[] = 'Ongeldige CSRF token.';
         } else {
             $importedCount = 0;
+            $failedRows    = [];
             foreach ($csvData as $idx => $row) {
                 // Sla rijen met fouten over — waarschuwingen mogen wel
                 if (!$validationResults[$idx]['valid']) {
@@ -173,7 +174,7 @@ elseif ($step === 3) {
                                 $customField = queryOne("SELECT id FROM custom_fields WHERE field_name = ?", [$fieldName]);
                                 if ($customField && !empty($mappedData[$assetField])) {
                                     execute(
-                                        "INSERT INTO custom_field_values (asset_id, field_id, value) VALUES (?, ?, ?) 
+                                        "INSERT INTO custom_field_values (asset_id, field_id, value) VALUES (?, ?, ?)
                                          ON DUPLICATE KEY UPDATE value = ?",
                                         [$result['id'], $customField['id'], $mappedData[$assetField], $mappedData[$assetField]]
                                     );
@@ -181,14 +182,27 @@ elseif ($step === 3) {
                             }
                         }
                     }
+                } else {
+                    $reason = $result['errors'][0] ?? 'Onbekende fout';
+                    $failedRows[] = "Rij " . ($idx + 1) . ": " . $reason;
                 }
             }
 
             if ($importedCount > 0) {
                 $success = "$importedCount asset(s) succesvol geïmporteerd.";
+                if (!empty($failedRows)) {
+                    $success .= ' (' . count($failedRows) . ' rij(en) mislukten alsnog tijdens het opslaan, zie hieronder.)';
+                }
                 unset($_SESSION['import_state']);
-                header('Location: ' . BASE_URL . '/modules/assets/?success=' . urlencode($success));
-                exit;
+                if (empty($failedRows)) {
+                    header('Location: ' . BASE_URL . '/modules/assets/?success=' . urlencode($success));
+                    exit;
+                }
+                // Er zijn deels mislukte rijen — toon die op deze pagina i.p.v. direct door te sturen
+                $errors = $failedRows;
+            } elseif (!empty($failedRows)) {
+                $errors[] = 'Geen enkele rij kon worden opgeslagen:';
+                $errors = array_merge($errors, $failedRows);
             } else {
                 $errors[] = 'Geen geldige rijen om te importeren.';
             }
