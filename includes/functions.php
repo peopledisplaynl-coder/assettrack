@@ -487,6 +487,9 @@ function validateAssetRow(array $data, int $locationId): array {
         $existing = queryOne("SELECT id FROM assets WHERE asset_number = ?", [$data['asset_number']]);
         if ($existing) $errors[] = "Assetnummer bestaat al: " . $data['asset_number'];
     } else {
+        // Leeg veld helemaal verwijderen, anders zet createAsset() hier NULL in
+        // plaats van automatisch een nummer te genereren (asset_number is NOT NULL).
+        unset($data['asset_number']);
         $warnings[] = "Assetnummer is leeg, wordt auto-gegenereerd";
     }
 
