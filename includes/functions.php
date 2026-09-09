@@ -709,6 +709,111 @@ function logActivity(string $action, string $table, int $recordId, ?array $oldVa
     logAudit($action, $table, $recordId, $oldValues, $newValues);
 }
 
+// ─── Custom velden ────────────────────────────────────────────────────────────
+
+function getActiveCustomFields(): array {
+    return query("SELECT * FROM custom_fields WHERE active = 1 ORDER BY sort_order, id");
+}
+
+// Geeft [field_id => value] terug voor een asset
+function getCustomFieldValues(int $assetId): array {
+    $rows = query("SELECT field_id, value FROM custom_field_values WHERE asset_id = ?", [$assetId]);
+    $out = [];
+    foreach ($rows as $row) {
+        $out[$row['field_id']] = $row['value'];
+    }
+    return $out;
+}
+
+// Geeft custom velden mét ingevulde waarde terug voor weergave (view.php)
+function getCustomFieldValuesForDisplay(int $assetId): array {
+    return query(
+        "SELECT cf.id, cf.field_label, cf.field_type, cf.field_options, cfv.value
+         FROM custom_fields cf
+         LEFT JOIN custom_field_values cfv ON cfv.field_id = cf.id AND cfv.asset_id = ?
+         WHERE cf.active = 1
+         ORDER BY cf.sort_order, cf.id",
+        [$assetId]
+    );
+}
+
+// Slaat geposte custom-veldwaarden op ($posted = $_POST['custom'] ?? [], keys zijn field_id)
+function saveCustomFieldValues(int $assetId, array $posted): void {
+    $fields = getActiveCustomFields();
+    foreach ($fields as $field) {
+        $fid = (int)$field['id'];
+        $raw = $posted[$fid] ?? null;
+
+        if ($field['field_type'] === 'boolean') {
+            $value = isset($posted[$fid]) ? '1' : '0';
+        } else {
+            $value = is_string($raw) ? trim($raw) : $raw;
+        }
+
+        if ($value === null || $value === '') {
+            execute("DELETE FROM custom_field_values WHERE asset_id = ? AND field_id = ?", [$assetId, $fid]);
+        } else {
+            execute(
+                "INSERT INTO custom_field_values (asset_id, field_id, value) VALUES (?, ?, ?)
+                 ON DUPLICATE KEY UPDATE value = ?",
+                [$assetId, $fid, $value, $value]
+            );
+        }
+    }
+}
+
+// Rendert één custom-veld input voor het toevoeg-/bewerkformulier
+function renderCustomFieldInput(array $field, $value = null): void {
+    $fid   = (int)$field['id'];
+    $name  = "custom[$fid]";
+    $id    = "custom_field_$fid";
+    $label = htmlspecialchars($field['field_label']) . ($field['required'] ? ' *' : '');
+    echo '<div class="form-group">';
+
+    if ($field['field_type'] !== 'boolean') {
+        echo '<label for="' . $id . '">' . $label . '</label>';
+    }
+
+    switch ($field['field_type']) {
+        case 'boolean':
+            echo '<div style="padding-top:6px;"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:normal;">';
+            echo '<input type="checkbox" id="' . $id . '" name="' . $name . '" value="1" ' . ($value ? 'checked' : '') . '>';
+            echo '<span>' . $label . '</span></label></div>';
+            break;
+        case 'textarea':
+            echo '<textarea id="' . $id . '" name="' . $name . '" class="form-control" rows="3"' . ($field['required'] ? ' required' : '') . '>' . htmlspecialchars($value ?? '') . '</textarea>';
+            break;
+        case 'select':
+            $options = $field['field_options'] ? (json_decode($field['field_options'], true) ?? []) : [];
+            echo '<select id="' . $id . '" name="' . $name . '" class="form-control"' . ($field['required'] ? ' required' : '') . '>';
+            echo '<option value="">- Kies -</option>';
+            foreach ($options as $opt) {
+                $sel = ((string)$value === (string)$opt) ? 'selected' : '';
+                echo '<option value="' . htmlspecialchars($opt) . '" ' . $sel . '>' . htmlspecialchars($opt) . '</option>';
+            }
+            echo '</select>';
+            break;
+        case 'number':
+            echo '<input type="number" id="' . $id . '" name="' . $name . '" class="form-control" value="' . htmlspecialchars($value ?? '') . '"' . ($field['required'] ? ' required' : '') . '>';
+            break;
+        case 'date':
+            echo '<input type="date" id="' . $id . '" name="' . $name . '" class="form-control" value="' . htmlspecialchars($value ?? '') . '"' . ($field['required'] ? ' required' : '') . '>';
+            break;
+        case 'ip':
+            echo '<input type="text" id="' . $id . '" name="' . $name . '" class="form-control" placeholder="192.168.1.100" value="' . htmlspecialchars($value ?? '') . '"' . ($field['required'] ? ' required' : '') . '>';
+            break;
+        case 'mac':
+            echo '<input type="text" id="' . $id . '" name="' . $name . '" class="form-control" placeholder="00:11:22:33:44:55" value="' . htmlspecialchars($value ?? '') . '"' . ($field['required'] ? ' required' : '') . '>';
+            break;
+        case 'text':
+        default:
+            echo '<input type="text" id="' . $id . '" name="' . $name . '" class="form-control" value="' . htmlspecialchars($value ?? '') . '"' . ($field['required'] ? ' required' : '') . '>';
+            break;
+    }
+
+    echo '</div>';
+}
+
 // ─── Hulpfuncties ─────────────────────────────────────────────────────────────
 
 function generateRandomString(int $length = 10): string {
