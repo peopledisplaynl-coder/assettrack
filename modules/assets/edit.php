@@ -94,6 +94,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             registerBrandUsage($data['brand']);
             logAudit('UPDATE', 'assets', $id, $oldValues, array_merge($asset, $data));
+            saveCustomFieldValues($id, $_POST['custom'] ?? []);
             $success = 'Asset succesvol bijgewerkt!';
             $asset   = array_merge($asset, $data);
         } catch (Exception $e) {
@@ -107,6 +108,8 @@ $brands   = getBrands();
 $types    = getAssetTypes();
 $statuses = getAssetStatuses();
 $rooms    = getRoomsByLocation((int)$asset['location_id']);
+$customFields = getActiveCustomFields();
+$customPosted = ($_SERVER['REQUEST_METHOD'] === 'POST') ? ($_POST['custom'] ?? []) : getCustomFieldValues($id);
 
 $pageTitle = 'Asset bewerken';
 include __DIR__ . '/../../templates/header.php';
@@ -368,7 +371,21 @@ include __DIR__ . '/../../templates/header.php';
         </div>
     </div>
 
-    <!-- SECTIE 7: Opmerking -->
+    <?php if (!empty($customFields)): ?>
+    <!-- SECTIE 7: Aangepaste velden -->
+    <div class="card" style="margin-bottom:20px;">
+        <div class="card-body">
+            <h3 style="margin-top:0;color:#1a2332;border-bottom:1px solid #e5e7eb;padding-bottom:10px;">Aangepaste velden</h3>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:15px;">
+                <?php foreach ($customFields as $cf): ?>
+                    <?php renderCustomFieldInput($cf, $customPosted[$cf['id']] ?? null); ?>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <!-- SECTIE 8: Opmerking -->
     <div class="card" style="margin-bottom:20px;">
         <div class="card-body">
             <h3 style="margin-top:0;color:#1a2332;border-bottom:1px solid #e5e7eb;padding-bottom:10px;">Opmerking</h3>

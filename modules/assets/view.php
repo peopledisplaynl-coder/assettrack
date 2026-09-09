@@ -274,6 +274,36 @@ $replacementSoon  = !empty($asset['replacement_due_date']) && isDateWithinMonths
     </div>
 </div>
 
+<?php
+$customFieldValues = getCustomFieldValuesForDisplay($asset['id']);
+$customFieldValues = array_filter($customFieldValues, function ($cf) {
+    return $cf['value'] !== null && $cf['value'] !== '';
+});
+?>
+<?php if (!empty($customFieldValues)): ?>
+<!-- SECTIE 6: Aangepaste velden -->
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-body">
+        <h3 style="margin-top:0;color:#1a2332;border-bottom:1px solid #e5e7eb;padding-bottom:10px;">Aangepaste velden</h3>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:15px;">
+            <?php foreach ($customFieldValues as $cf):
+                $displayValue = $cf['value'];
+                if ($cf['field_type'] === 'boolean') {
+                    $displayValue = $displayValue ? '✅ Ja' : 'Nee';
+                } elseif ($cf['field_type'] === 'date') {
+                    $displayValue = formatDate($displayValue);
+                }
+            ?>
+            <div>
+                <div style="font-size:0.8rem;color:#6b7280;text-transform:uppercase;font-weight:600;"><?= htmlspecialchars($cf['field_label']) ?></div>
+                <div style="margin-top:3px;"><?= htmlspecialchars($displayValue) ?></div>
+            </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
 <?php if (!empty($asset['notes'])): ?>
 <!-- Opmerking -->
 <div class="card" style="margin-bottom:20px;">

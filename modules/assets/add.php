@@ -97,6 +97,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $assetId = createAsset($data);
             registerBrandUsage($data['brand']);
             logAudit('INSERT', 'assets', $assetId, null, $data);
+            saveCustomFieldValues($assetId, $_POST['custom'] ?? []);
 
             // Sla pending koppelingen op
             $pendingRaw = $_POST['pending_relations'] ?? '[]';
@@ -128,6 +129,8 @@ $brands     = getBrands();
 $types      = getAssetTypes();
 $statuses   = getAssetStatuses();
 $rooms      = getRoomsByLocation(getLocationId());
+$customFields = getActiveCustomFields();
+$customPosted = $_POST['custom'] ?? [];
 
 $pageTitle = 'Asset toevoegen';
 include __DIR__ . '/../../templates/header.php';
@@ -381,7 +384,21 @@ include __DIR__ . '/../../templates/header.php';
         </div>
     </div>
 
-    <!-- SECTIE 7: Opmerking -->
+    <?php if (!empty($customFields)): ?>
+    <!-- SECTIE 7: Aangepaste velden -->
+    <div class="card" style="margin-bottom:20px;">
+        <div class="card-body">
+            <h3 style="margin-top:0;color:#1a2332;border-bottom:1px solid #e5e7eb;padding-bottom:10px;">Aangepaste velden</h3>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:15px;">
+                <?php foreach ($customFields as $cf): ?>
+                    <?php renderCustomFieldInput($cf, $customPosted[$cf['id']] ?? null); ?>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <!-- SECTIE 8: Opmerking -->
     <div class="card" style="margin-bottom:20px;">
         <div class="card-body">
             <h3 style="margin-top:0;color:#1a2332;border-bottom:1px solid #e5e7eb;padding-bottom:10px;">Opmerking</h3>
