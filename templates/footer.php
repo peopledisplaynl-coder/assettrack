@@ -8,7 +8,7 @@ if (!isset($company)) {
 $footerAppName  = $company['app_name']      ?? 'AssetTrack';
 $footerPrimary  = $company['theme_primary']  ?? '#2563eb';
 $footerSecondary= $company['theme_secondary'] ?? '#1a2332';
-$footerVersion  = '3.1';
+$footerVersion  = defined('APP_VERSION') ? APP_VERSION : '4.0';
 ?>
 </main>
 
