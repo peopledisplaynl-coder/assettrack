@@ -18,6 +18,12 @@ if (!defined('BASE_URL')) {
     define('BASE_URL', '');
 }
 
+// App-versienummer — één centrale plek. Footer (templates/footer.php) gebruikt
+// dit; bij een versiebump alleen hier aanpassen (en het badge in README.md).
+if (!defined('APP_VERSION')) {
+    define('APP_VERSION', '4.0');
+}
+
 $db = null;
 
 function getDB(): PDO {
