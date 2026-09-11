@@ -177,6 +177,52 @@ main {
     font-size: 0.83rem;
     font-weight: 600;
 }
+.header-avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    overflow: hidden;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.2);
+}
+.header-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+.header-avatar-initial {
+    color: rgba(255,255,255,0.9);
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+.profile-avatar-lg {
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    overflow: hidden;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-primary, #2563eb);
+    border: 1px solid rgba(0,0,0,0.08);
+}
+.profile-avatar-lg img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+.profile-avatar-lg .profile-avatar-lg-initial {
+    color: #fff;
+    font-size: 2rem;
+    font-weight: 700;
+}
 
 /* Hamburger */
 .hamburger {

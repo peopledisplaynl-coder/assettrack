@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash VARCHAR(255) NOT NULL,
     role ENUM('superadmin','admin','user','visitor') DEFAULT 'user',
     active TINYINT(1) DEFAULT 1,
+    avatar_filename VARCHAR(255) NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     last_login DATETIME NULL
 );
