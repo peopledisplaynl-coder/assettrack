@@ -107,6 +107,14 @@ $stacked    = $codeType === 'barcode' || $isPortrait;
 $fontBasisMm = min($wMm, $hMm);
 $fontMm = max(2.2, min(4.5, $fontBasisMm * 0.13));
 
+// Veilige rand rondom de content in mm (i.p.v. de vorige px-waarden, die op
+// deze kleine labelmaten nog geen halve mm marge gaven) — zie print.php voor
+// de volledige uitleg. Fix n.a.v. een echte printtest (2026-09-10, Dymo
+// 11355) waarbij tekst en QR-code er net af werden gesneden.
+// AANVULLING (2026-09-10, tweede testronde): 0,8-1,5mm bleek nog niet
+// helemaal genoeg -- marge opgehoogd naar 1,5-2,2mm.
+$safeEdgeMm = max(1.5, min(2.2, $fontBasisMm * 0.1));
+
 // QR op hoge resolutie genereren, pas daarna via CSS verkleinen — zie print.php.
 $qrPx = (int)max(300, min(900, round($fontBasisMm * 14)));
 
@@ -120,7 +128,7 @@ $codeFlexPct = $codeType === 'barcode' ? 58 : 42;
 // (2026-09-08): schaalt af op basis van de daadwerkelijke lettergrootte
 // ($fontMm), niet alleen de breedte -- zie de uitgebreide toelichting in
 // print.php bij dezelfde variabele voor waarom breedte-alleen niet volstond.
-$assetNrFontMm = $fontMm * 1.25;
+$assetNrFontMm = $fontMm * 1.15; // .asset-nr is 1.15em (was 1.25em, iets kleiner na testronde 2026-09-10)
 $estCharWidthMm = $assetNrFontMm * 0.62;
 $neededTextMm = 12 * $estCharWidthMm + 2;
 $maxCodeMm = max(8, $wMm - $neededTextMm);
@@ -179,18 +187,20 @@ body { font-family:Arial,Helvetica,sans-serif; font-size:<?= $fontMm ?>mm; backg
     width:<?= $size['w'] ?>; height:<?= $size['h'] ?>;
     flex-shrink:0;
     display:flex; align-items:stretch;
-    padding:2px 2px 2px 3px;
+    padding:<?= $safeEdgeMm ?>mm;
     <?php if ($rotate): ?>transform:rotate(90deg);<?php endif; ?>
 }
 .label-left { flex:1; min-width:0; display:flex; flex-direction:column; justify-content:space-evenly; overflow:hidden; padding-right:2px; }
-.label-right { display:flex; align-items:center; justify-content:center; flex:0 0 <?= $sideCodeFlexPct ?>%; max-width:<?= $sideCodeFlexPct ?>%; max-height:calc(<?= $size['h'] ?> - 6px); padding:2px 3px 2px 2px; overflow:hidden; }
+.label-right { display:flex; align-items:center; justify-content:center; flex:0 0 <?= $sideCodeFlexPct ?>%; max-width:<?= $sideCodeFlexPct ?>%; max-height:calc(<?= $size['h'] ?> - <?= $safeEdgeMm * 2 ?>mm); padding:<?= $safeEdgeMm ?>mm; overflow:hidden; }
 /* .label-right heeft nu een VASTE, beperkte breedte (flex-basis + max-width)
    EN een hoogtelimiet, zodat de QR-afbeelding er nooit meer uit kan groeien
    dan bedoeld -- fix voor de te-grote-QR/afgekapte-tekst bug. Zie print.php
    voor de volledige toelichting. Omdat het vak nu een DEFINITIEVE breedte
    heeft (i.p.v. "fit-content"), resolvet 100% op de afbeelding erin nu wel
    betrouwbaar. */
-.label-right img { max-width:100% !important; max-height:100% !important; width:auto !important; height:auto !important; display:block; }
+/* 90% i.p.v. 100% -- extra paar mm eigen witruimte rond de QR-code, los van
+   de rand-marge van het label zelf -- zie print.php voor de uitleg. */
+.label-right img { max-width:90% !important; max-height:90% !important; width:auto !important; height:auto !important; display:block; }
 .label-stacked .label-right svg { max-width:100% !important; max-height:100% !important; width:100% !important; height:100% !important; display:block; }
 /* Stapel-layout: tekst boven, code eronder over de volle breedte i.p.v.
    tekst-links/code-rechts -- zie print.php voor de volledige uitleg. */
@@ -201,12 +211,12 @@ body { font-family:Arial,Helvetica,sans-serif; font-size:<?= $fontMm ?>mm; backg
     white-space:normal; overflow-wrap:break-word; text-overflow:clip;
     display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
 }
-.label-stacked .label-right { flex:0 0 <?= $codeFlexPct ?>%; max-width:none; max-height:none; width:100%; padding:1px 2px; }
+.label-stacked .label-right { flex:0 0 <?= $codeFlexPct ?>%; max-width:none; max-height:none; width:100%; padding:<?= $safeEdgeMm ?>mm; }
 /* Streepjescode op een portrait-label: de code-afbeelding wordt 90° gedraaid
    binnen zijn vak -- zie print.php voor de uitleg. */
 .barcode-rotate-wrap { width:<?= $codeBoxHMm ?>mm; height:<?= $codeBoxWMm ?>mm; transform:rotate(90deg); }
 .barcode-rotate-wrap svg { max-width:100% !important; max-height:100% !important; width:100% !important; height:100% !important; display:block; }
-.asset-nr { font-weight:700; font-size:1.25em; line-height:1.1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.asset-nr { font-weight:700; font-size:1.15em; line-height:1.1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:center; }
 .lbl-main { font-size:0.9em; color:#111; line-height:1.25; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .lbl-sub  { font-size:0.8em; color:#333; line-height:1.2;  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
