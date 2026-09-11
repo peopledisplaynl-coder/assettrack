@@ -22,15 +22,18 @@ $editableFields = [
     'location_id'      => ['label' => 'Locatie',               'type' => 'select_location', 'group' => 'Algemeen'],
     'manufacturer_url' => ['label' => 'Fabrikant URL',         'type' => 'text',   'group' => 'Algemeen'],
     'business_critical'=> ['label' => 'Bedrijfskritisch',      'type' => 'select_bool', 'group' => 'Algemeen'],
+    'serial_number'    => ['label' => 'Serienummer',           'type' => 'text',   'group' => 'Algemeen'],
     // Gebruik
     'assigned_to'      => ['label' => 'In gebruik bij',        'type' => 'text',   'group' => 'Gebruik'],
     'most_recent_user' => ['label' => 'Meest recente gebruiker','type' => 'text',  'group' => 'Gebruik'],
     'installed_date'   => ['label' => 'Geïnstalleerd op',      'type' => 'date',   'group' => 'Gebruik'],
+    'registration_date'=> ['label' => 'Registratiedatum',      'type' => 'date',   'group' => 'Gebruik'],
     // Financieel
     'purchase_date'         => ['label' => 'Aankoopdatum',          'type' => 'date', 'group' => 'Financieel'],
     'warranty_end_date'     => ['label' => 'Einde garantie',        'type' => 'date', 'group' => 'Financieel'],
     'depreciation_years'    => ['label' => 'Afschrijving (jaren)',   'type' => 'number', 'group' => 'Financieel'],
     'advised_replacement_date' => ['label' => 'Advies vervangingsdatum', 'type' => 'date', 'group' => 'Financieel'],
+    'replacement_due_date'  => ['label' => 'Vervangingsdatum (handmatig)', 'type' => 'date', 'group' => 'Financieel'],
     'autoupdate_expiry'     => ['label' => 'Autoupdate vervalt',    'type' => 'date', 'group' => 'Financieel'],
     // Netwerk
     'mac_address'      => ['label' => 'MAC-adres',             'type' => 'text',   'group' => 'Netwerk'],
@@ -46,6 +49,8 @@ $editableFields = [
     'monitor_serial'   => ['label' => 'Serienummer monitor',   'type' => 'text',   'group' => 'Hardware'],
     'phone_number'     => ['label' => 'Telefoonnummer',        'type' => 'text',   'group' => 'Hardware'],
     // Overig
+    'in_repair_since'      => ['label' => 'In reparatie sinds',     'type' => 'date', 'group' => 'Overig'],
+    'out_of_service_since' => ['label' => 'Buiten gebruik sinds',   'type' => 'date', 'group' => 'Overig'],
     'notes'            => ['label' => 'Opmerking',             'type' => 'textarea','group' => 'Overig'],
 ];
 
@@ -546,7 +551,8 @@ function updateValueInput(fieldName) {
         valueInput.replaceWith(ta);
 
     } else if (['purchase_date','warranty_end_date','installed_date',
-                 'advised_replacement_date','autoupdate_expiry'].includes(fieldName)) {
+                 'advised_replacement_date','autoupdate_expiry','registration_date',
+                 'replacement_due_date','in_repair_since','out_of_service_since'].includes(fieldName)) {
         const inp = document.createElement('input');
         inp.type = 'date';
         inp.name = 'field_value';
