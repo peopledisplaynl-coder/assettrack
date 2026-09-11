@@ -152,6 +152,20 @@ $stacked = $codeType === 'barcode' || $isPortrait;
 $fontBasisMm = min($wMm, $hMm);
 $fontMm = max(2.2, min(4.5, $fontBasisMm * 0.13));
 
+// Veilige rand rondom de content (in mm, niet px). Vrijwel elke losse
+// labelprinter (Dymo/Brother/Zebra) heeft een klein stukje NIET-bedrukbare
+// rand rond een los, gestanst label -- zeker aan de rand waar het label van
+// de rol wordt afgesneden. De vorige padding stond in px (2-4px), wat op
+// deze kleine labelmaten (mm-schaal) omgerekend nog geen halve mm was --
+// te weinig marge, met als gevolg dat tekst/QR-code er bij een echte
+// printtest (2026-09-10, Dymo 11355) net af werd gesneden. Nu een expliciete
+// mm-marge, meeschalend met de labelgrootte (klein label = kleine marge,
+// groter label = iets meer marge).
+// AANVULLING (2026-09-10, tweede testronde): 0,8-1,5mm bleek bij een echte
+// Dymo 11355-print nog niet helemaal genoeg -- er viel nog net een randje
+// van de eerste letter af. Marge opgehoogd naar 1,5-2,2mm.
+$safeEdgeMm = max(1.5, min(2.2, $fontBasisMm * 0.1));
+
 // QR-code: altijd op hoge resolutie genereren (ruim boven wat er fysiek nodig is)
 // en pas daarna via CSS verkleinen naar de labelgrootte. Dat geeft een scherpe,
 // goed scanbare code -- de oude vaste 60px werd juist uitgerekt en dus wazig.
@@ -204,7 +218,7 @@ $codeFlexPct = $codeType === 'barcode' ? 58 : 42;
 // tekenbreedte-verhouding van een vet, hoofdletter-zwaar lettertype (Arial
 // bold) t.o.v. de fontgrootte -- empirisch getoetst aan echte gerenderde
 // tekstbreedtes in de testomgeving.
-$assetNrFontMm = $fontMm * 1.25; // .asset-nr is 1.25em
+$assetNrFontMm = $fontMm * 1.15; // .asset-nr is 1.15em (was 1.25em, iets kleiner na testronde 2026-09-10)
 $estCharWidthMm = $assetNrFontMm * 0.62;
 $neededTextMm = 12 * $estCharWidthMm + 2; // +2mm speling voor padding/rand
 $maxCodeMm = max(8, $wMm - $neededTextMm); // nooit kleiner dan 8mm, anders onscanbaar
@@ -289,7 +303,7 @@ body { font-family: Arial, Helvetica, sans-serif; background:#f3f4f6; font-size:
     flex-shrink: 0;
     display: flex;
     align-items: stretch;
-    padding: 2px 4px 2px 3px;
+    padding: <?= $safeEdgeMm ?>mm;
     <?php if ($rotate): ?>
     transform: rotate(90deg);
     <?php endif; ?>
@@ -322,8 +336,8 @@ body { font-family: Arial, Helvetica, sans-serif; background:#f3f4f6; font-size:
     display: flex; align-items: center; justify-content: center;
     flex: 0 0 <?= $sideCodeFlexPct ?>%;
     max-width: <?= $sideCodeFlexPct ?>%;
-    max-height: calc(<?= $size['h'] ?> - 6px);
-    padding: 2px 3px 2px 2px;
+    max-height: calc(<?= $size['h'] ?> - <?= $safeEdgeMm * 2 ?>mm);
+    padding: <?= $safeEdgeMm ?>mm;
     overflow: hidden;
 }
 /* .label-right heeft nu een VASTE, beperkte breedte (flex-basis + max-width,
@@ -334,8 +348,13 @@ body { font-family: Arial, Helvetica, sans-serif; background:#f3f4f6; font-size:
    betrouwbaar -- vandaar 100%/100% hieronder i.p.v. de vorige, foutgevoelige
    absolute mm-berekening. */
 .label-right img {
-    max-width: 100% !important;
-    max-height: 100% !important;
+    /* Bewust op 90% i.p.v. 100% van het beschikbare vak -- geeft de QR-code
+       een extra paar mm eigen witruimte rondom, los van de rand-marge van het
+       label zelf. Fix n.a.v. een echte printtest (2026-09-10, Dymo 11355)
+       waarbij Ton vroeg om extra zekerheid dat de code niet aan de rand
+       hangt, ook al past hij binnen zijn vak. */
+    max-width: 90% !important;
+    max-height: 90% !important;
     width: auto !important;
     height: auto !important;
     display: block;
@@ -366,7 +385,7 @@ body { font-family: Arial, Helvetica, sans-serif; background:#f3f4f6; font-size:
     max-width: none;
     max-height: none;
     width: 100%;
-    padding: 1px 2px;
+    padding: <?= $safeEdgeMm ?>mm;
 }
 /* Streepjescode op een portrait-label: het vak zelf blijft normaal (volle
    breedte, vast hoogte-aandeel), maar de code-afbeelding erbinnen wordt 90°
@@ -384,7 +403,7 @@ body { font-family: Arial, Helvetica, sans-serif; background:#f3f4f6; font-size:
     height: 100% !important;
     display: block;
 }
-.asset-nr { font-weight:700; font-size:1.25em; line-height:1.1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.asset-nr { font-weight:700; font-size:1.15em; line-height:1.1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:center; }
 .lbl-main { font-size:0.9em;  color:#111; line-height:1.25; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .lbl-sub  { font-size:0.8em;  color:#333; line-height:1.2;  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
