@@ -401,6 +401,16 @@ function compressUploadedImage(
     return $ok;
 }
 
+// Bouwt de publieke URL voor een profielfoto, of null als er geen is. Centraal
+// gehouden zodat header.php en modules/users/profile.php dezelfde opbouw
+// gebruiken (map: assets/uploads/user_avatars/).
+function getUserAvatarUrl(?string $filename): ?string {
+    if (empty($filename)) {
+        return null;
+    }
+    return BASE_URL . '/assets/uploads/user_avatars/' . rawurlencode($filename);
+}
+
 // Valideert één CSV rij zonder te importeren
 function validateAssetRow(array $data, int $locationId): array {
     $errors   = [];

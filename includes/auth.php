@@ -4,16 +4,23 @@
  * AssetTrack - IT Asset Management System
  */
 
+// Sessie-timeout na inactiviteit, in seconden. Stond op 1800 (30 minuten) --
+// op verzoek van Ton verlengd naar 28800 (8 uur, een hele school-/werkdag)
+// zodat je tussendoor niet steeds opnieuw hoeft in te loggen.
+if (!defined('SESSION_TIMEOUT_SECONDS')) {
+    define('SESSION_TIMEOUT_SECONDS', 28800);
+}
+
 // Sessie instellingen VOOR session_start
 if (session_status() === PHP_SESSION_NONE) {
     ini_set('session.cookie_httponly', 1);
     ini_set('session.use_only_cookies', 1);
-    ini_set('session.gc_maxlifetime', 1800);
+    ini_set('session.gc_maxlifetime', SESSION_TIMEOUT_SECONDS);
     session_start();
 }
 
-// Session timeout check (30 minuten)
-if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity']) > 1800) {
+// Session timeout check
+if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity']) > SESSION_TIMEOUT_SECONDS) {
     session_unset();
     session_destroy();
     session_start();

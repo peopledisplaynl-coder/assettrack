@@ -1,7 +1,16 @@
 <?php
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/functions.php';
 requireLogin();
+
+// ── Eigen profiel (avatar) ────────────────────────────────────────
+$headerCurrentUser = queryOne("SELECT full_name, avatar_filename FROM users WHERE id = ?", [getUserId()]);
+$headerAvatarUrl   = getUserAvatarUrl($headerCurrentUser['avatar_filename'] ?? null);
+// Initiaal-fallback is bewust gebaseerd op de gebruikersnaam (niet de volledige naam) --
+// dat veld bevat bij sommige klanten een organisatienaam i.p.v. een persoonsnaam, wat een
+// verwarrende letter zou geven (bijv. "S" van "Stichting ..." i.p.v. iets herkenbaars).
+$headerInitial     = strtoupper(substr(trim(getUserName() ?: ($headerCurrentUser['full_name'] ?? '')), 0, 1)) ?: '?';
 
 // ── Thema instellingen ────────────────────────────────────────────
 $company        = queryOne("SELECT * FROM companies WHERE active = 1 ORDER BY id LIMIT 1");
@@ -73,7 +82,7 @@ $fontSlug = urlencode(preg_replace('/[^a-zA-Z0-9 ]/', '', $themeFont));
     <?php if ($locationColor): ?>--loc-color: <?= $locationColor ?>;<?php endif; ?>
 }
 </style>
-<link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/style.css">
+<link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/style.css?v=<?= @filemtime(__DIR__ . '/../assets/css/style.css') ?: time() ?>">
 </head>
 <body>
 
@@ -229,10 +238,17 @@ $fontSlug = urlencode(preg_replace('/[^a-zA-Z0-9 ]/', '', $themeFont));
 
     <!-- Gebruiker -->
     <div class="header-user">
-        <div class="header-username">
+        <a href="<?= BASE_URL ?>/modules/users/profile.php" class="header-avatar" title="Mijn profiel">
+            <?php if ($headerAvatarUrl): ?>
+            <img src="<?= htmlspecialchars($headerAvatarUrl) ?>" alt="">
+            <?php else: ?>
+            <span class="header-avatar-initial"><?= htmlspecialchars($headerInitial) ?></span>
+            <?php endif; ?>
+        </a>
+        <a href="<?= BASE_URL ?>/modules/users/profile.php" class="header-username" style="text-decoration:none;">
             <strong><?= htmlspecialchars(getUserName()) ?></strong>
             <?= htmlspecialchars(getRole()) ?>
-        </div>
+        </a>
         <a href="<?= BASE_URL ?>/logout.php" class="btn btn-sm btn-secondary">Uitloggen</a>
     </div>
 
