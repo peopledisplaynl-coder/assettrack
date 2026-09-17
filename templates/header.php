@@ -168,6 +168,13 @@ $fontSlug = urlencode(preg_replace('/[^a-zA-Z0-9 ]/', '', $themeFont));
                 </button>
             </form>
             <?php endforeach; ?>
+            <?php if (hasPermission('view_assets') && count($userLocations) > 1): ?>
+            <a href="<?= BASE_URL ?>/modules/assets/search_all.php" class="loc-dropdown-item"
+               style="border-top:1px solid rgba(255,255,255,0.12);margin-top:2px;text-decoration:none;">
+                <span style="width:20px;text-align:center;">🌐</span>
+                Alle locaties doorzoeken
+            </a>
+            <?php endif; ?>
         </div>
     <?php else: ?>
         <span class="location-badge<?= $locationColor ? ' has-color' : '' ?>" style="cursor:default;">
@@ -198,13 +205,14 @@ $fontSlug = urlencode(preg_replace('/[^a-zA-Z0-9 ]/', '', $themeFont));
                 <span class="nav-icon">💻</span>Assets</a></li>
             <?php endif; ?>
 
-            <?php if (hasPermission('view_assets') && count($userLocations) > 1): ?>
-            <li><a href="<?= BASE_URL ?>/modules/assets/search_all.php"
-                   class="<?= strpos($_SERVER['REQUEST_URI'],'search_all.php')!==false?'active':'' ?>">
-                <span class="nav-icon">🌐</span>Alle locaties</a></li>
-            <?php endif; ?>
-
-            <?php if (hasPermission('manage_users')): ?>
+            <?php
+            // "Alle locaties" is verplaatst naar het locatie-dropdown-menu (bij de locatie-badge
+            // hierboven) en "Gebruikers" naar Instellingen -- op verzoek van Ton, te veel losse
+            // knoppen in de header. Dit item blijft als vangnet staan voor het (zeldzame) geval dat
+            // een gebruiker wel gebruikersbeheer-rechten heeft maar geen toegang tot Instellingen
+            // zelf (dan zou hij anders nergens meer bij Gebruikers kunnen komen).
+            ?>
+            <?php if (hasPermission('manage_users') && !hasPermission('manage_settings')): ?>
             <li><a href="<?= BASE_URL ?>/modules/users/"
                    class="<?= strpos($_SERVER['REQUEST_URI'],'/users/')!==false?'active':'' ?>">
                 <span class="nav-icon">👥</span>Gebruikers</a></li>
@@ -242,20 +250,36 @@ $fontSlug = urlencode(preg_replace('/[^a-zA-Z0-9 ]/', '', $themeFont));
         </ul>
     </nav>
 
-    <!-- Gebruiker -->
-    <div class="header-user">
-        <a href="<?= BASE_URL ?>/modules/users/profile.php" class="header-avatar" title="Mijn profiel">
-            <?php if ($headerAvatarUrl): ?>
-            <img src="<?= htmlspecialchars($headerAvatarUrl) ?>" alt="">
-            <?php else: ?>
-            <span class="header-avatar-initial"><?= htmlspecialchars($headerInitial) ?></span>
-            <?php endif; ?>
-        </a>
-        <a href="<?= BASE_URL ?>/modules/users/profile.php" class="header-username" style="text-decoration:none;">
-            <strong><?= htmlspecialchars(getUserName()) ?></strong>
-            <?= htmlspecialchars(getRole()) ?>
-        </a>
-        <a href="<?= BASE_URL ?>/logout.php" class="btn btn-sm btn-secondary">Uitloggen</a>
+    <!-- Gebruiker: avatar+naam is nu één dropdown-knop (Mijn profiel / Uitloggen) i.p.v. drie
+         losse elementen -- op verzoek van Ton, te veel losse knoppen in de header. -->
+    <div class="header-user" style="position:relative;">
+        <button type="button" onclick="toggleUserDropdown(event)"
+                style="display:flex;align-items:center;gap:10px;background:none;border:none;
+                       cursor:pointer;padding:0;font-family:inherit;">
+            <span class="header-avatar" title="Mijn account">
+                <?php if ($headerAvatarUrl): ?>
+                <img src="<?= htmlspecialchars($headerAvatarUrl) ?>" alt="">
+                <?php else: ?>
+                <span class="header-avatar-initial"><?= htmlspecialchars($headerInitial) ?></span>
+                <?php endif; ?>
+            </span>
+            <span class="header-username">
+                <strong><?= htmlspecialchars(getUserName()) ?></strong>
+                <?= htmlspecialchars(getRole()) ?>
+            </span>
+            <span style="opacity:0.6;font-size:0.65rem;color:rgba(255,255,255,0.55);">▾</span>
+        </button>
+        <div id="userDropdown" class="location-dropdown" style="right:0;left:auto;">
+            <a href="<?= BASE_URL ?>/modules/users/profile.php" class="loc-dropdown-item" style="text-decoration:none;">
+                <span style="width:20px;text-align:center;">👤</span>
+                Mijn profiel
+            </a>
+            <a href="<?= BASE_URL ?>/logout.php" class="loc-dropdown-item"
+               style="text-decoration:none;border-top:1px solid rgba(255,255,255,0.12);">
+                <span style="width:20px;text-align:center;">🚪</span>
+                Uitloggen
+            </a>
+        </div>
     </div>
 
 </div>
@@ -270,12 +294,19 @@ function toggleLocDropdown(e) {
     var d = document.getElementById('locDropdown');
     if (d) d.classList.toggle('open');
 }
+function toggleUserDropdown(e) {
+    e.stopPropagation();
+    var d = document.getElementById('userDropdown');
+    if (d) d.classList.toggle('open');
+}
 function toggleNav() {
     document.getElementById('mainNav').classList.toggle('open');
 }
 document.addEventListener('click', function(e) {
     var d = document.getElementById('locDropdown');
     if (d && !e.target.closest('.location-badge-wrap')) d.classList.remove('open');
+    var u = document.getElementById('userDropdown');
+    if (u && !e.target.closest('.header-user')) u.classList.remove('open');
     if (!e.target.closest('#mainNav') && !e.target.closest('.hamburger')) {
         var n = document.getElementById('mainNav');
         if (n) n.classList.remove('open');

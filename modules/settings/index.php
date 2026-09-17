@@ -16,6 +16,13 @@ $menu = [
     ['url' => 'appearance.php',    'icon' => '🎨', 'title' => 'Weergave & Thema',         'desc' => 'Kleuren, lettertype, logo en locatie kleuren.'],
 ];
 
+// Gebruikersbeheer stond voorheen als los menu-item in de hoofdnavigatie; op verzoek van Ton
+// (te veel losse knoppen in de header) hier ondergebracht bij Instellingen. Vooraan gezet omdat
+// dit in de praktijk een van de vaakst gebruikte onderdelen is.
+if (hasPermission('manage_users')) {
+    array_unshift($menu, ['url' => '../users/', 'icon' => '👥', 'title' => 'Gebruikers', 'desc' => 'Beheer gebruikers, rollen en rechten per locatie.']);
+}
+
 if (getRole() === 'superadmin') {
     $menu[] = ['url' => 'system.php', 'icon' => '⚙️', 'title' => 'Systeem & Audit log', 'desc' => 'Bekijk systeeminfo en alle wijzigingen in het systeem.'];
     $menu[] = ['url' => 'backup.php',  'icon' => '💾', 'title' => 'Backup & Herstel',    'desc' => 'Database, bestanden of volledige backup downloaden.'];
