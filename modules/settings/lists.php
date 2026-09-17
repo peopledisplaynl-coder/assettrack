@@ -52,6 +52,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrfToken($_POST['csrf_token'
         }
     }
 
+    if ($postAction === 'delete') {
+        $target = queryOne("SELECT name FROM brands WHERE id=?", [$id]);
+        if ($target) {
+            $used = queryOne("SELECT COUNT(*) as n FROM assets WHERE brand = ?", [$target['name']]);
+            execute("DELETE FROM brands WHERE id=?", [$id]);
+            $success = "Merk '{$target['name']}' verwijderd.";
+            if ($used && (int)$used['n'] > 0) {
+                $success .= " Let op: {$used['n']} asset(s) hadden dit merk als tekstwaarde; die assets blijven ongewijzigd.";
+            }
+        }
+    }
+
     $brands = query("SELECT * FROM brands ORDER BY name ASC");
 }
 
@@ -109,6 +121,13 @@ include __DIR__ . '/../../templates/header.php';
                                 <button type="submit" class="btn btn-sm <?= $item['active'] ? 'btn-warning' : 'btn-success' ?>">
                                     <?= $item['active'] ? 'Deactiveren' : 'Activeren' ?>
                                 </button>
+                            </form>
+                            <form method="POST" style="margin:0;"
+                                  onsubmit="return confirm('Dit merk definitief verwijderen uit de lijst? Bestaande assets blijven ongewijzigd.');">
+                                <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
+                                <input type="hidden" name="action" value="delete">
+                                <input type="hidden" name="id" value="<?= $item['id'] ?>">
+                                <button type="submit" class="btn btn-sm btn-danger" title="Verwijderen">✕</button>
                             </form>
                         </td>
                     </tr>
