@@ -23,6 +23,12 @@ if (!canEditLocation((int)$asset['location_id'])) {
     </div>');
 }
 
+// Kan deze gebruiker het asset naar een andere locatie verplaatsen?
+// (superadmin ziet altijd alle locaties; iemand met toegang tot maar 1
+// locatie heeft sowieso nergens anders naartoe te verplaatsen)
+$userLocations     = getUserLocations();
+$canChangeLocation = count($userLocations) > 1;
+
 $errors  = [];
 $success = '';
 
@@ -73,6 +79,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'access_point_number'      => trim($_POST['access_point_number'] ?? ''),
         'manufacturer_url'         => trim($_POST['manufacturer_url'] ?? ''),
     ];
+
+    // Locatie wijzigen (verplaatsen) - alleen toegestaan als de gebruiker
+    // toegang heeft tot meer dan 1 locatie, en alleen naar een locatie waar
+    // hij ook daadwerkelijk mag bewerken.
+    if ($canChangeLocation) {
+        $requestedLocationId = (int)($_POST['location_id'] ?? $asset['location_id']);
+        if ($requestedLocationId !== (int)$asset['location_id']) {
+            if (!canEditLocation($requestedLocationId)) {
+                $errors[] = 'Geen bewerkrechten voor de gekozen locatie.';
+            } else {
+                $data['location_id'] = $requestedLocationId;
+            }
+        }
+    }
 
     // Validatie
     if (empty($data['brand']))  $errors[] = 'Merk is verplicht';
@@ -191,9 +211,23 @@ include __DIR__ . '/../../templates/header.php';
                     <input type="text" name="serial_number" class="form-control"
                            value="<?= htmlspecialchars($asset['serial_number'] ?? '') ?>">
                 </div>
+                <?php if ($canChangeLocation): ?>
+                <div class="form-group">
+                    <label>Locatie</label>
+                    <select name="location_id" id="locationSelect" class="form-control">
+                        <?php foreach ($userLocations as $loc): ?>
+                        <option value="<?= (int)$loc['id'] ?>"
+                                <?= (int)$asset['location_id'] === (int)$loc['id'] ? 'selected' : '' ?>>
+                            <?= htmlspecialchars(($loc['org_name'] ?? '') . ' — ' . $loc['name']) ?>
+                        </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <small style="color:#6b7280;">Verplaatst dit asset naar een andere locatie — kies hieronder ook de juiste ruimte.</small>
+                </div>
+                <?php endif; ?>
                 <div class="form-group">
                     <label>Ruimte</label>
-                    <select name="room" class="form-control">
+                    <select name="room" id="roomSelect" class="form-control">
                         <option value="">- Kies ruimte -</option>
                         <?php foreach ($rooms as $room): ?>
                         <option value="<?= htmlspecialchars($room['name']) ?>"
@@ -466,5 +500,29 @@ function calculateReplacement() {
     }
 }
 </script>
+
+<?php if ($canChangeLocation): ?>
+<script>
+// De ruimte-keuzelijst hoort bij een locatie - bij het wisselen van locatie
+// hier ook de ruimte-opties verversen naar die van de nieuw gekozen locatie.
+const roomsByLocation = <?= json_encode(array_combine(
+    array_map(fn($l) => (string)$l['id'], $userLocations),
+    array_map(fn($l) => array_column(getRoomsByLocation((int)$l['id']), 'name'), $userLocations)
+), JSON_UNESCAPED_UNICODE) ?>;
+document.getElementById('locationSelect')?.addEventListener('change', function() {
+    const roomSelect = document.getElementById('roomSelect');
+    const rooms = roomsByLocation[this.value] || [];
+    const current = roomSelect.value;
+    roomSelect.innerHTML = '<option value="">- Kies ruimte -</option>';
+    rooms.forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        if (name === current) opt.selected = true;
+        roomSelect.appendChild(opt);
+    });
+});
+</script>
+<?php endif; ?>
 
 <?php include __DIR__ . '/../../templates/footer.php'; ?>

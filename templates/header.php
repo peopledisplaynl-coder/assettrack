@@ -194,8 +194,14 @@ $fontSlug = urlencode(preg_replace('/[^a-zA-Z0-9 ]/', '', $themeFont));
 
             <?php if (hasPermission('view_assets')): ?>
             <li><a href="<?= BASE_URL ?>/modules/assets/"
-                   class="<?= strpos($_SERVER['REQUEST_URI'],'/assets/')!==false?'active':'' ?>">
+                   class="<?= (strpos($_SERVER['REQUEST_URI'],'/assets/')!==false && strpos($_SERVER['REQUEST_URI'],'search_all.php')===false)?'active':'' ?>">
                 <span class="nav-icon">💻</span>Assets</a></li>
+            <?php endif; ?>
+
+            <?php if (hasPermission('view_assets') && count($userLocations) > 1): ?>
+            <li><a href="<?= BASE_URL ?>/modules/assets/search_all.php"
+                   class="<?= strpos($_SERVER['REQUEST_URI'],'search_all.php')!==false?'active':'' ?>">
+                <span class="nav-icon">🌐</span>Alle locaties</a></li>
             <?php endif; ?>
 
             <?php if (hasPermission('manage_users')): ?>

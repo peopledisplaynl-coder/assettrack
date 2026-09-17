@@ -186,7 +186,7 @@ function createAsset(array $data): int {
 
 function updateAsset(int $id, array $data): bool {
     $allowedFields = [
-        'room', 'brand', 'model', 'type', 'serial_number', 'status',
+        'location_id', 'room', 'brand', 'model', 'type', 'serial_number', 'status',
         'assigned_to', 'installed_date', 'purchase_date', 'warranty_end_date',
         'depreciation_years', 'autoupdate_expiry', 'advised_replacement_date',
         'mac_address', 'lan_ip_address', 'management_ip', 'most_recent_user',
@@ -609,14 +609,27 @@ function importAssetFromRow(array $data, int $locationId): array {
 
 // ─── Zoeken ───────────────────────────────────────────────────────────────────
 
-function searchAssets(string $query = '', array $filters = [], int $limit = 50, int $offset = 0): array {
+function searchAssets(string $query = '', array $filters = [], int $limit = 50, int $offset = 0, ?array $locationIds = null): array {
     $where  = [];
     $params = [];
 
-    $locationId = getLocationId();
-    if ($locationId) {
-        $where[]  = "a.location_id = ?";
-        $params[] = $locationId;
+    if ($locationIds !== null) {
+        // Expliciete set toegestane locaties (bijv. cross-locatie zoeken voor
+        // een superadmin/multi-locatie-gebruiker) - overschrijft de normale
+        // sessie-locatie-scoping hieronder.
+        if (!empty($locationIds)) {
+            $placeholders = implode(',', array_fill(0, count($locationIds), '?'));
+            $where[]      = "a.location_id IN ($placeholders)";
+            $params       = array_merge($params, $locationIds);
+        } else {
+            $where[] = "1=0";
+        }
+    } else {
+        $locationId = getLocationId();
+        if ($locationId) {
+            $where[]  = "a.location_id = ?";
+            $params[] = $locationId;
+        }
     }
 
     if (!empty($query)) {
