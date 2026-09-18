@@ -106,12 +106,41 @@ function onScanSuccess(decodedText) {
     scanning = false;
     setStatus('✅ Code gevonden! Laden...', 'success');
 
-    // Een QR-code bevat al een volledige scan.php-URL. Een streepjescode bevat
-    // alleen het kale assetnummer (zo staat het ook op het label) -- die zetten we
-    // hier zelf om naar dezelfde scan.php-pagina, die op assetnummer kan opzoeken.
-    let destination = decodedText;
-    if (!/^https?:\/\//i.test(decodedText)) {
+    // Een streepjescode bevat alleen het kale assetnummer (zo staat het ook op het
+    // label) -- zie de kale-tekst-afhandeling hieronder.
+    //
+    // Een QR-code bevat een volledige scan.php-URL, MET het domein dat gold op het
+    // moment van printen (zie modules/labels/print.php). Bij een latere domein- of
+    // hostingverhuizing kan dat een ANDER domein zijn dan waar deze Scanner nu op
+    // draait. Daarom hier bewust NIET meer de URL letterlijk volgen (destination =
+    // decodedText, zoals voorheen) -- dat bleef domeinafhankelijk, precies het
+    // probleem dat Ton meldde (2026-09-18). We halen nu alleen de "id"- of
+    // "asset"-parameter uit de gescande URL en bouwen de bestemming altijd zelf op
+    // met het HUIDIGE domein van deze Scanner (BASE_URL) -- zo blijft scannen via de
+    // ingebouwde Scanner werken, ook op labels die vóór een domeinverhuizing zijn
+    // geprint. (Een losse/algemene camera-app die de URL letterlijk opent, kan dit
+    // niet -- die kan alleen bereikt worden via Instellingen -> Scan-domein, zie
+    // modules/settings/scan_domain.php.)
+    let destination;
+    let assetId = null, assetNr = null;
+    if (/^https?:\/\//i.test(decodedText)) {
+        try {
+            const scanned = new URL(decodedText);
+            assetId = scanned.searchParams.get('id');
+            assetNr = scanned.searchParams.get('asset');
+        } catch (e) { /* geen geldige URL -- valt hieronder terug op de letterlijke link */ }
+    }
+
+    if (assetId) {
+        destination = '<?= BASE_URL ?>/modules/assets/scan.php?id=' + encodeURIComponent(assetId);
+    } else if (assetNr) {
+        destination = '<?= BASE_URL ?>/modules/assets/scan.php?asset=' + encodeURIComponent(assetNr);
+    } else if (!/^https?:\/\//i.test(decodedText)) {
         destination = '<?= BASE_URL ?>/modules/assets/scan.php?asset=' + encodeURIComponent(decodedText);
+    } else {
+        // Herkende URL zonder id/asset-parameter -- val terug op de letterlijke
+        // link, beter dan helemaal niets doen.
+        destination = decodedText;
     }
 
     if (html5QrCode) {
