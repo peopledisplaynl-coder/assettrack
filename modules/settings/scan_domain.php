@@ -59,18 +59,33 @@ include __DIR__ . '/../../templates/header.php';
 <?php if ($success): ?><div class="alert alert-success">✓ <?= htmlspecialchars($success) ?></div><?php endif; ?>
 <?php if ($error): ?><div class="alert alert-danger"><?= htmlspecialchars($error) ?></div><?php endif; ?>
 
+<!-- Belangrijkste boodschap staat hier BOVENAAN, groot en als eerste -- op verzoek/n.a.v. verwarring
+     bij Ton (2026-09-18): hij las de kaart hieronder ("dit veld is alleen voor nieuwe labels") en vroeg
+     zich terecht af of dat betekent dat al zijn honderden/duizenden bestaande, al geprinte labels dan
+     NIET meer werken na een domeinwissel. Dat is niet zo -- dat wordt door de Scanner zelf opgelost,
+     niet door dit veld -- maar die geruststelling stond voorheen pas in de rechter kaart, te laat om de
+     verwarring te voorkomen. -->
+<div class="alert alert-success" style="border-left:4px solid #10b981;">
+    ✅ <strong>Al je bestaande, al geprinte labels blijven werken na een domeinwissel</strong> — zolang ze
+    gescand worden met de ingebouwde AssetTrack-Scanner (📷 Scanner in het menu). Dat gebeurt automatisch,
+    voor alle labels, met elk oud domein erin, zonder dat je daar hieronder iets voor hoeft in te stellen.
+    Het veld hieronder regelt alleen welk domein er in <strong>nieuw</strong> af te drukken labels komt te
+    staan.
+</div>
+
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
     <div class="card">
         <div class="card-body">
             <h3 style="margin-top:0;color:#1a2332;border-bottom:1px solid #e5e7eb;padding-bottom:10px;">
-                Vast domein instellen
+                Vast domein instellen (alleen voor nieuwe labels)
             </h3>
             <p style="color:#6b7280;font-size:0.875rem;">
                 Elke QR-code en streepjescode op een geprint label verwijst naar dit domein.
                 Verhuist AssetTrack later naar een ander domein of een andere domeinnaam, dan blijven
                 al geprinte labels naar het <strong>oude</strong> domein verwijzen — die kunnen niet
                 achteraf worden aangepast. Dit veld bepaalt alleen welk domein er in
-                <strong>nieuw</strong> af te drukken labels komt te staan.
+                <strong>nieuw</strong> af te drukken labels komt te staan; het is niet nodig om
+                bestaande labels te laten blijven werken (zie de melding hierboven).
             </p>
             <form method="POST">
                 <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
