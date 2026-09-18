@@ -806,12 +806,26 @@ include __DIR__ . '/../../templates/header.php';
                 </tr></thead>
                 <tbody>
                     <?php foreach ($rows as $row): ?>
+                    <?php
+                    // Asset-id opzoeken op basis van assetnummer -- voorheen alleen gebruikt voor het
+                    // kleine "↗"-knopje aan het eind van de rij, nu ook om de Assetnummer-cel zelf
+                    // klikbaar te maken (verzoek van Ton, 2026-09-18: "gegevens die getoond worden
+                    // selecteerbaar maken zodat er naar het asset gegaan kan worden"). Deze detailtabel
+                    // wordt door ALLE rapporttypes met een detailweergave gebruikt (Volledig overzicht,
+                    // per ruimte/locatie/status-details, garanties, vervanging, afschrijving,
+                    // bedrijfskritisch) -- dus deze ene aanpassing werkt meteen overal.
+                    $a = queryOne("SELECT id FROM assets WHERE asset_number = ?", [$row['Assetnummer']??'']);
+                    ?>
                     <tr>
                         <?php foreach ($row as $key => $val): ?>
                         <td>
                         <?php
                         $v = (string)($val ?? '');
-                        if ($v && preg_match('/^\d{4}-\d{2}-\d{2}/', $v)) {
+                        if ($key === 'Assetnummer' && $a) {
+                            echo '<a href="'.BASE_URL.'/modules/assets/view.php?id='.(int)$a['id'].'" '
+                               . 'style="color:#2563eb;font-weight:600;text-decoration:none;">'
+                               . htmlspecialchars($v) . '</a>';
+                        } elseif ($v && preg_match('/^\d{4}-\d{2}-\d{2}/', $v)) {
                             $ts = strtotime($v);
                             $past = $ts < time();
                             $soon = !$past && $ts <= strtotime('+6 months');
@@ -831,7 +845,6 @@ include __DIR__ . '/../../templates/header.php';
                         </td>
                         <?php endforeach; ?>
                         <td>
-                            <?php $a = queryOne("SELECT id FROM assets WHERE asset_number = ?", [$row['Assetnummer']??'']); ?>
                             <?php if ($a): ?>
                             <a href="<?= BASE_URL ?>/modules/assets/view.php?id=<?= $a['id'] ?>"
                                class="btn btn-sm btn-secondary" target="_blank">↗</a>
