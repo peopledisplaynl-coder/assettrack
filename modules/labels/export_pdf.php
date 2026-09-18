@@ -37,7 +37,7 @@ $placeholders = implode(',', array_fill(0, count($ids), '?'));
 $assets = query("SELECT a.*, l.name as location_name FROM assets a
     LEFT JOIN locations l ON a.location_id = l.id WHERE a.id IN ($placeholders)", $ids);
 
-$company     = queryOne("SELECT name FROM companies WHERE active = 1 ORDER BY id LIMIT 1");
+$company     = queryOne("SELECT name, scan_base_url FROM companies WHERE active = 1 ORDER BY id LIMIT 1");
 $companyName = !empty($company['name']) ? $company['name'] : 'AssetTrack';
 $locationNames = [];
 foreach (query("SELECT id, name FROM locations WHERE active = 1") as $loc) {
@@ -140,7 +140,15 @@ $barcodeRotate = $stacked && $codeType === 'barcode' && $isPortrait;
 $codeBoxWMm = max(8, $wMm - 3);
 $codeBoxHMm = max(8, $hMm * ($codeFlexPct / 100) - 3);
 
-$baseUrl = (isset($_SERVER['HTTPS']) ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'] . BASE_URL;
+// Op verzoek van Ton (2026-09-18): een vast, door de superadmin ingesteld domein
+// gebruiken voor de QR-code/streepjescode als dat is ingevuld bij Instellingen ->
+// Scan-domein (modules/settings/scan_domain.php) -- zo blijven NIEUW afgedrukte
+// labels naar het juiste domein verwijzen, ook als AssetTrack ondertussen op een
+// ander domein draait dan waar deze pagina nu toevallig op wordt geopend. Zonder
+// ingesteld domein: zoals voorheen automatisch het domein van dit verzoek.
+$baseUrl = !empty($company['scan_base_url'])
+    ? rtrim($company['scan_base_url'], '/') . BASE_URL
+    : (isset($_SERVER['HTTPS']) ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'] . BASE_URL;
 $fname = 'labels_' . $format . '_' . date('Y-m-d') . '.html';
 
 header('Content-Type: text/html; charset=utf-8');

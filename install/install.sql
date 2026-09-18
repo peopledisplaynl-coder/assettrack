@@ -220,6 +220,10 @@ CREATE TABLE IF NOT EXISTS companies (
     phone VARCHAR(30) NULL,
     email VARCHAR(100) NULL,
     website VARCHAR(255) NULL,
+    -- Vast domein voor QR/streepjescode-labels (modules/labels/print.php en export_pdf.php).
+    -- Leeg/NULL = automatisch het domein van het huidige verzoek gebruiken (oud gedrag).
+    -- Zie modules/settings/scan_domain.php.
+    scan_base_url VARCHAR(255) NULL,
     app_name VARCHAR(100) DEFAULT 'AssetTrack',
     app_logo VARCHAR(500) NULL,
     theme_primary VARCHAR(7) DEFAULT '#2563eb',
