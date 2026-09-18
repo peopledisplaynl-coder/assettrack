@@ -21,12 +21,24 @@ $filterMonths   = (int)($_GET['months'] ?? 12);
 $showDetails    = isset($_GET['details']) && $_GET['details'] === '1';
 
 // Locatiefilter — alleen als die in de toegestane lijst zit
-$requestedLoc   = $_GET['location_id'] ?? '';
-if ($requestedLoc && !in_array((int)$requestedLoc, $allowedLocationIds)) {
-    $requestedLoc = ''; // Geen toegang → negeer
+// BUGFIX 2026-09-18: als je in het filter bewust "Alle mijn locaties" kiest, stuurt het
+// formulier location_id als AANWEZIGE maar LEGE parameter mee. De oude code kon dat niet
+// onderscheiden van "helemaal geen location_id in de URL" (bijv. een link vanuit het
+// rapportenmenu) en viel in BEIDE gevallen terug op de huidige sessielocatie -- waardoor
+// "Alle mijn locaties" dus nooit werkte en je na het toepassen steeds terugsprong naar 1
+// locatie. Nu: een AANWEZIGE parameter (ook leeg) wordt altijd letterlijk gerespecteerd;
+// alleen als de parameter volledig ONTBREEKT (isset() == false, bijv. bij een eerste bezoek
+// vanuit het rapportenmenu) valt het terug op de sessielocatie als standaardwaarde.
+if (isset($_GET['location_id'])) {
+    $requestedLoc = $_GET['location_id'];
+    if ($requestedLoc && !in_array((int)$requestedLoc, $allowedLocationIds)) {
+        $requestedLoc = ''; // Geen toegang → negeer
+    }
+    $filterLocation = $requestedLoc; // ook '' respecteren = "alle mijn locaties"
+} else {
+    // Geen location_id in de URL: standaard de huidige sessielocatie
+    $filterLocation = (string)getLocationId();
 }
-// Standaard: huidige sessielocatie
-$filterLocation = $requestedLoc ?: (string)getLocationId();
 // Als alleen 1 locatie beschikbaar: forceer die
 if (count($allowedLocationIds) === 1) {
     $filterLocation = (string)$allowedLocationIds[0];
@@ -547,13 +559,17 @@ $allStatuses   = getAssetStatuses();
 
 $exportParamsBase = array_filter([
     'type' => $type,
-    'location_id' => $filterLocation, 'status' => $filterStatus,
+    'status' => $filterStatus,
     'room' => $filterRoom, 'asset_type' => $filterType,
     'months' => $filterMonths !== 12 ? $filterMonths : '',
     'details' => $showDetails ? '1' : '',
     'cf_filter' => $filterCfField, 'cf_filter_q' => $filterCfValue,
     'extra' => $selectedExtra, 'cf' => $selectedCf,
 ]);
+// Altijd meegeven (ook als leeg = "alle mijn locaties") -- zelfde reden als de BUGFIX hierboven:
+// array_filter() zou een lege $filterLocation er anders stilzwijgend uitfilteren, waardoor de
+// CSV/PDF-export bij "Alle mijn locaties" ook weer stiekem terugviel op de sessielocatie.
+$exportParamsBase['location_id'] = $filterLocation;
 $exportParams    = http_build_query($exportParamsBase + ['export' => 'csv']);
 $pdfExportParams = http_build_query($exportParamsBase + ['export' => 'pdf']);
 
@@ -762,8 +778,7 @@ include __DIR__ . '/../../templates/header.php';
                         <?php endforeach; ?>
                         <td>
                             <?php
-                            $dp = ['type'=>$type,'details'=>'1'];
-                            if ($filterLocation) $dp['location_id'] = $filterLocation;
+                            $dp = ['type'=>$type,'details'=>'1','location_id'=>$filterLocation];
                             if ($filterType)     $dp['asset_type']  = $filterType;
                             if ($type==='per_room'     && isset($row['Ruimte'])) {
                                 $dp['room'] = ($row['Ruimte'] === ROOM_EMPTY_LABEL) ? ROOM_EMPTY_MARKER : $row['Ruimte'];
