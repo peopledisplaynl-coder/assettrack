@@ -56,6 +56,15 @@ $titles = [
 ];
 $title = $titles[$type] ?? 'Rapport';
 
+// Placeholder-tekst voor een lege ruimte in de "per ruimte"-samenvatting (zie de COALESCE in de
+// per_room-query hieronder) + een losse marker om vanuit de "Details"-link op die groep (of vanuit
+// de ruimte-keuzelijst) ook daadwerkelijk op "geen ruimte" te kunnen filteren. De placeholder-TEKST
+// zelf mag nooit als filterwaarde de WHERE in gaan (die matcht dan letterlijk niets, want geen asset
+// heeft "— Geen ruimte —" als ruimtenaam) -- vandaar de losse marker. Let op: als de placeholder-
+// tekst in de per_room-query hieronder ooit verandert, moet ROOM_EMPTY_LABEL mee veranderen.
+define('ROOM_EMPTY_LABEL',  '— Geen ruimte —');
+define('ROOM_EMPTY_MARKER', '__geen_ruimte__');
+
 // Helper: basis WHERE clausule bouwen
 // Altijd beperkt tot toegestane locaties van de ingelogde gebruiker
 // $cfField/$cfValue: optioneel filteren op een custom veld ("bevat tekst")
@@ -75,7 +84,16 @@ function buildWhere(string $loc, string $status, string $room, string $atype, st
         $where[]  = '1=0'; // Geen locaties: niets tonen
     }
     if ($status) { $where[] = "$p.status = ?";      $params[] = $status; }
-    if ($room)   { $where[] = "$p.room = ?";        $params[] = $room; }
+    if ($room) {
+        if ($room === ROOM_EMPTY_MARKER) {
+            // "Geen ruimte" -- komt alleen voor via de Details-link op de samenvattingsrij
+            // "— Geen ruimte —" (zie hieronder) of via het bijpassende keuzelijst-item.
+            $where[] = "($p.room IS NULL OR $p.room = '')";
+        } else {
+            $where[] = "$p.room = ?";
+            $params[] = $room;
+        }
+    }
     if ($atype)  { $where[] = "$p.type = ?";        $params[] = $atype; }
     if ($brand)  { $where[] = "$p.brand LIKE ?";    $params[] = "%$brand%"; }
     if ($cfField !== '' && $cfValue !== '') {
@@ -186,7 +204,10 @@ $rows        = [];
 switch ($type) {
 
     case 'per_room':
-        [$w, $p] = buildWhere($filterLocation, $filterStatus, '', $filterType, $filterBrand, 'a', $filterCfField, $filterCfValue);
+        // BUGFIX 2026-09-18: hier stond een hardgecodeerde '' i.p.v. $filterRoom, waardoor de
+        // samenvatting altijd ALLE ruimtes liet zien, ook als je een specifieke ruimte had
+        // gekozen in het filter -- de ruimtefilter werkte toen alleen nog op de detailtabel.
+        [$w, $p] = buildWhere($filterLocation, $filterStatus, $filterRoom, $filterType, $filterBrand, 'a', $filterCfField, $filterCfValue);
         $wc = $w ? 'WHERE '.implode(' AND ',$w) : '';
         $summaryRows = query("SELECT COALESCE(a.room,'— Geen ruimte —') as Ruimte,
             COALESCE(l.name,'— Geen locatie —') as Locatie, COUNT(*) as Totaal,
@@ -604,6 +625,8 @@ include __DIR__ . '/../../templates/header.php';
                         <option value="<?= htmlspecialchars($r['name']) ?>" <?= $filterRoom===$r['name']?'selected':'' ?>>
                             <?= htmlspecialchars($r['name']) ?></option>
                         <?php endforeach; ?>
+                        <option value="<?= ROOM_EMPTY_MARKER ?>" <?= $filterRoom===ROOM_EMPTY_MARKER?'selected':'' ?>>
+                            <?= htmlspecialchars(ROOM_EMPTY_LABEL) ?> (zonder ruimte)</option>
                     </select>
                 </div>
                 <?php endif; ?>
@@ -742,7 +765,9 @@ include __DIR__ . '/../../templates/header.php';
                             $dp = ['type'=>$type,'details'=>'1'];
                             if ($filterLocation) $dp['location_id'] = $filterLocation;
                             if ($filterType)     $dp['asset_type']  = $filterType;
-                            if ($type==='per_room'     && isset($row['Ruimte']))   $dp['room']        = $row['Ruimte'];
+                            if ($type==='per_room'     && isset($row['Ruimte'])) {
+                                $dp['room'] = ($row['Ruimte'] === ROOM_EMPTY_LABEL) ? ROOM_EMPTY_MARKER : $row['Ruimte'];
+                            }
                             if ($type==='per_status'   && isset($row['Status']))   $dp['status']      = $row['Status'];
                             if ($type==='per_location' && isset($row['Locatie'])) {
                                 foreach ($userLocations as $loc) {
