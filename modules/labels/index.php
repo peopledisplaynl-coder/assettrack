@@ -57,6 +57,14 @@ $labelFormats = [
         'a4_40'  => 'A4 — 40 labels per vel (48×25mm)',
         'a4_65'  => 'A4 — 65 labels per vel (38×21mm)',
     ],
+    // Op verzoek van Ton (2026-09-19): een Fichero Mini Pocket Printer type 5836,
+    // een Bluetooth-labelprinter die alleen via zijn eigen telefoon-app bediend
+    // kan worden (geen officiële koppel-API). Dit "formaat" genereert daarom geen
+    // printbare pagina zoals de andere formaten, maar losse PNG-afbeeldingen die
+    // je zelf in de Fichero-app importeert -- zie modules/labels/export_image.php.
+    '— Bluetooth pocket-printer (losse PNG-afbeelding) —' => [
+        'fichero_5836' => 'Fichero Mini Pocket Printer 5836 (30×14mm) — genereert een PNG per label',
+    ],
 ];
 
 // Max extra velden per formaat
@@ -86,6 +94,9 @@ $maxFields = [
     'a4_24'         => 6,
     'a4_40'         => 4,
     'a4_65'         => 3,
+    // Bewust minimalistisch, net als de Dymo 11355 hierboven -- 30x14mm is
+    // fysiek te klein voor meer dan assetnummer + code.
+    'fichero_5836'  => 0,
 ];
 
 // Formaten voor losse labelprinters (rol-labels, bv. Dymo/Brother/Zebra) --
@@ -99,6 +110,11 @@ $looseFormats = array_keys($labelFormats['— Losse labels (labelprinter) —'])
 // niet.
 $autoRotateFormats = ['dymo_99012', 'dymo_11355'];
 $rotatableFormats  = array_values(array_diff($looseFormats, $autoRotateFormats));
+
+// Formaten die geen printbare pagina opleveren maar losse PNG-afbeeldingen
+// (zie hierboven bij $labelFormats) -- het hoofdformulier post hiervoor naar
+// een andere endpoint, geregeld via JS onderin deze pagina.
+$imageOnlyFormats = ['fichero_5836'];
 
 $pageTitle = 'Labels afdrukken';
 include __DIR__ . '/../../templates/header.php';
@@ -262,6 +278,12 @@ include __DIR__ . '/../../templates/header.php';
                          font-size:0.8rem;color:#1e3a8a;">
                         Dit label wordt automatisch gedraaid zodat het op de rol past — een handmatig vinkje is hier niet nodig.
                     </div>
+                    <div id="ficheroImageNote" style="display:none;margin-top:10px;padding:10px;
+                         background:#eff6ff;border-radius:6px;border:1px solid #bfdbfe;
+                         font-size:0.8rem;color:#1e3a8a;">
+                        Dit formaat genereert losse PNG-afbeeldingen (geen printdialoog) — sla elke afbeelding
+                        op en importeer 'm in de Fichero-app om te printen.
+                    </div>
                 </div>
             </div>
 
@@ -328,7 +350,7 @@ include __DIR__ . '/../../templates/header.php';
             </div>
 
             <!-- Genereer knop -->
-            <button type="submit" class="btn btn-primary"
+            <button type="submit" class="btn btn-primary" id="labelSubmitBtn"
                     style="width:100%;padding:12px;font-size:1rem;"
                     onclick="return checkSelection()">
                 🖨️ Labels genereren
@@ -341,6 +363,7 @@ include __DIR__ . '/../../templates/header.php';
 const maxFieldsMap = <?= json_encode($maxFields) ?>;
 const rotatableFormats = <?= json_encode($rotatableFormats) ?>;
 const autoRotateFormats = <?= json_encode($autoRotateFormats) ?>;
+const imageFormats = <?= json_encode($imageOnlyFormats) ?>;
 
 function toggleAll(cb) {
     document.querySelectorAll('.asset-cb').forEach(c => c.checked = cb.checked);
@@ -373,6 +396,21 @@ function updateFormatUI(format) {
         rotatableFormats.includes(format) ? 'block' : 'none';
     document.getElementById('autoRotateNote').style.display =
         autoRotateFormats.includes(format) ? 'block' : 'none';
+    document.getElementById('ficheroImageNote').style.display =
+        imageFormats.includes(format) ? 'block' : 'none';
+
+    // Dit formaat genereert losse PNG-afbeeldingen i.p.v. een printbare pagina
+    // -- het formulier post dus naar een andere endpoint (zie
+    // modules/labels/export_image.php), en de knoptekst past zich mee aan.
+    const form = document.getElementById('labelForm');
+    const submitBtn = document.getElementById('labelSubmitBtn');
+    if (imageFormats.includes(format)) {
+        form.action = '<?= BASE_URL ?>/modules/labels/export_image.php';
+        if (submitBtn) submitBtn.textContent = '📱 PNG-afbeeldingen genereren';
+    } else {
+        form.action = '<?= BASE_URL ?>/modules/labels/print.php';
+        if (submitBtn) submitBtn.textContent = '🖨️ Labels genereren';
+    }
 
     // Update veld limiet. Let op: "?? 4" i.p.v. "|| 4" -- een formaat met max 0
     // (zoals de minimalistische Dymo 11355) is anders een valse 0, en JS's "||"
