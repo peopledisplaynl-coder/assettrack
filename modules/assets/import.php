@@ -56,31 +56,59 @@ if ($step === 1) {
                             $content = file_get_contents($file['tmp_name']);
                             $delimiter = $_POST['delimiter'] ?? ';';
 
-                            $lines = array_filter(array_map('trim', explode("\n", $content)));
-                            if (count($lines) > 500) {
+                            // Excel exporteert CSV's op Windows vaak als Windows-1252/ANSI
+                            // i.p.v. UTF-8 (met name als er accenten in voorkomen, bijv.
+                            // "Conciërge" of "Geïnstalleerd"). Zonder deze conversie kwamen
+                            // zulke tekens er als "?" of kapotte tekens uit. Alleen
+                            // converteren als het bestand ECHT geen geldige UTF-8 is —
+                            // een bestand dat al UTF-8 is, blijft ongewijzigd.
+                            if (!mb_check_encoding($content, 'UTF-8')) {
+                                $converted = @mb_convert_encoding($content, 'UTF-8', 'Windows-1252');
+                                if ($converted !== false) {
+                                    $content = $converted;
+                                }
+                            }
+
+                            // CSV parsen met fgetcsv() op een geheugenstream i.p.v. het bestand
+                            // eerst zelf op "\n" op te knippen en dan per regel str_getcsv() aan
+                            // te roepen. Dat laatste breekt namelijk op een aangeleverd veld met
+                            // een regeleinde erin (bijv. een meerregelige "Opmerking", heel normaal
+                            // bij een export vanuit Excel) -- zo'n veld werd dan in meerdere losse,
+                            // onzinnige "rijen" opgeknipt (met o.a. een veel te lange waarde in de
+                            // Assetnummer-kolom, wat later een database-fout gaf: "Data too long for
+                            // column 'asset_number'"). fgetcsv() leest een quoted veld met een
+                            // regeleinde erin wél als één logisch geheel, zoals Excel het bedoelde.
+                            $csvData = [];
+                            $headers = null;
+                            $rowNum  = 0;
+                            $stream  = fopen('php://temp', 'r+');
+                            fwrite($stream, $content);
+                            rewind($stream);
+                            while (($row = fgetcsv($stream, 0, $delimiter, '"', '\\')) !== false) {
+                                // Volledig lege regel (bijv. een lege regel aan het einde van het
+                                // bestand) -- fgetcsv() geeft dan een array met exact 1 NULL-waarde.
+                                if ($row === [null]) {
+                                    continue;
+                                }
+                                $row = array_map(fn($v) => trim((string)$v), $row);
+                                if ($rowNum === 0) {
+                                    $headers = $row;
+                                } else {
+                                    $record = [];
+                                    foreach ($headers as $idx => $header) {
+                                        $record[$header] = $row[$idx] ?? '';
+                                    }
+                                    $csvData[] = $record;
+                                }
+                                $rowNum++;
+                            }
+                            fclose($stream);
+
+                            if (count($csvData) > 500) {
                                 $errors[] = 'Maximaal 500 rijen mag geïmporteerd worden.';
                             } else {
-                                // Parse CSV
-                                $csvData = [];
-                                $headers = null;
-
-                                foreach ($lines as $lineNum => $line) {
-                                    $row = str_getcsv($line, $delimiter);
-                                    if ($lineNum === 0) {
-                                        $headers = array_map('trim', $row);
-                                    } else {
-                                        $record = [];
-                                        foreach ($headers as $idx => $header) {
-                                            $record[$header] = trim($row[$idx] ?? '');
-                                        }
-                                        $csvData[] = $record;
-                                    }
-                                }
-
                                 if (empty($csvData)) {
                                     $errors[] = 'CSV bestand bevat geen gegevens.';
-                                } else if (count($csvData) > 500) {
-                                    $errors[] = 'Maximaal 500 rijen per import.';
                                 } else {
                                     $_SESSION['import_state']['csv_data'] = $csvData;
                                     $_SESSION['import_state']['headers'] = $headers;
