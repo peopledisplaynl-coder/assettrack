@@ -73,7 +73,15 @@ $formats = [
     'a4_21'         => ['w'=>'70mm',   'h'=>'42.3mm', 'font'=>'8pt', 'a4'=>true, 'cols'=>3, 'pt'=>'0mm',    'pl'=>'0mm',    'gap'=>'0mm',   'rows_per_page'=>7,  'name'=>'A4 21/vel'],
     'a4_24'         => ['w'=>'63.5mm', 'h'=>'33.9mm', 'font'=>'7pt', 'a4'=>true, 'cols'=>3, 'pt'=>'13.1mm', 'pl'=>'7.2mm',  'gap'=>'0mm',   'rows_per_page'=>8,  'name'=>'A4 24/vel'],
     'a4_40'         => ['w'=>'48.5mm', 'h'=>'25.4mm', 'font'=>'6pt', 'a4'=>true, 'cols'=>4, 'pt'=>'10.7mm', 'pl'=>'4.5mm',  'gap'=>'0mm',   'rows_per_page'=>10, 'name'=>'A4 40/vel'],
-    'a4_65'         => ['w'=>'38.1mm', 'h'=>'21.2mm', 'font'=>'5pt', 'a4'=>true, 'cols'=>5, 'pt'=>'10.7mm', 'pl'=>'4.7mm',  'gap'=>'0mm',   'rows_per_page'=>13, 'name'=>'A4 65/vel'],
+    // Avery J8651 (en gelijkwaardige "65 per vel"-producten van andere merken, bv. Label
+    // Planet LP65/38): officiële template-specificatie is GEEN 0mm horizontale tussenruimte
+    // tussen de kolommen, maar 2,5mm (kolom-pitch 40,6mm i.p.v. de labelbreedte van 38,1mm) --
+    // geverifieerd bij twee onafhankelijke bronnen (Label Planet en MR-Label) na Tons melding
+    // dat een testafdruk niet overeenkwam met zijn fysieke Avery J8651-vel. Verticaal is er
+    // wél geen tussenruimte (rij-pitch = labelhoogte = 21,2mm), dat klopte al. De CSS
+    // "gap"-shorthand hieronder is "gap: <rij-gap> <kolom-gap>", dus "0mm 2,5mm". Marges
+    // (10,7mm boven, 4,75mm links) kwamen al overeen met de officiële specificatie.
+    'a4_65'         => ['w'=>'38.1mm', 'h'=>'21.2mm', 'font'=>'5pt', 'a4'=>true, 'cols'=>5, 'pt'=>'10.7mm', 'pl'=>'4.75mm', 'gap'=>'0mm 2.5mm', 'rows_per_page'=>13, 'name'=>'A4 65/vel'],
 ];
 
 if ($format === 'custom') {
