@@ -139,7 +139,7 @@ include __DIR__ . '/../../templates/header.php';
     <h1>Asset bewerken: <?= htmlspecialchars($asset['asset_number']) ?></h1>
     <div style="display:flex;gap:10px;">
         <a href="<?= BASE_URL ?>/modules/assets/view.php?id=<?= $asset['id'] ?>" class="btn btn-secondary">Bekijken</a>
-        <a href="<?= BASE_URL ?>/modules/assets/" class="btn btn-secondary">← Terug</a>
+        <a href="<?= htmlspecialchars(getAssetsListUrl()) ?>" class="btn btn-secondary">← Terug</a>
     </div>
 </div>
 

@@ -34,7 +34,7 @@ $replacementSoon  = !empty($asset['replacement_due_date']) && isDateWithinMonths
         <?php if (hasPermission('delete_assets')): ?>
         <a href="<?= BASE_URL ?>/modules/assets/delete.php?id=<?= $asset['id'] ?>" class="btn btn-secondary">Verwijderen</a>
         <?php endif; ?>
-        <a href="<?= BASE_URL ?>/modules/assets/" class="btn btn-secondary">← Terug</a>
+        <a href="<?= htmlspecialchars(getAssetsListUrl()) ?>" class="btn btn-secondary">← Terug</a>
     </div>
 </div>
 

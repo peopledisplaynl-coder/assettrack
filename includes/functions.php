@@ -633,9 +633,28 @@ function searchAssets(string $query = '', array $filters = [], int $limit = 50, 
     }
 
     if (!empty($query)) {
-        $where[]  = "(a.asset_number LIKE ? OR a.brand LIKE ? OR a.model LIKE ? OR a.serial_number LIKE ? OR a.assigned_to LIKE ?)";
+        // Op verzoek van Ton doorzoekt de zoekbalk niet meer alleen
+        // assetnummer/merk/model/serienummer/gebruiker, maar zo veel
+        // mogelijk velden van een asset (o.a. telefoonnummer, ruimte en
+        // aankoopdatum) zodat je met één zoekterm bijna alles kunt
+        // terugvinden. Datumvelden staan bij MySQL/MariaDB als DATE
+        // opgeslagen, maar een LIKE-vergelijking zet die automatisch om
+        // naar tekst (bijv. "2023-09-15"), dus zoeken op (een deel van)
+        // een datum of jaartal werkt hierdoor ook gewoon mee.
+        $searchableColumns = [
+            'a.asset_number', 'a.brand', 'a.model', 'a.type', 'a.serial_number',
+            'a.assigned_to', 'a.room', 'a.most_recent_user', 'a.status',
+            'a.mac_address', 'a.lan_ip_address', 'a.management_ip',
+            'a.phone_number', 'a.access_point_number', 'a.manufacturer_url',
+            'a.notes', 'a.operating_system', 'a.cpu', 'a.ram',
+            'a.monitor_serial', 'a.touchscreen_monitor_type',
+            'a.purchase_date', 'a.installed_date', 'a.warranty_end_date',
+            'a.replacement_due_date', 'a.advised_replacement_date',
+            'a.autoupdate_expiry', 'a.in_repair_since', 'a.out_of_service_since',
+        ];
+        $where[]  = '(' . implode(' OR ', array_map(fn($col) => "$col LIKE ?", $searchableColumns)) . ')';
         $term     = "%$query%";
-        $params   = array_merge($params, [$term, $term, $term, $term, $term]);
+        $params   = array_merge($params, array_fill(0, count($searchableColumns), $term));
     }
 
     if (!empty($filters['status'])) { $where[] = "a.status = ?"; $params[] = $filters['status']; }
@@ -652,6 +671,30 @@ function searchAssets(string $query = '', array $filters = [], int $limit = 50, 
                   LEFT JOIN locations l ON a.location_id = l.id
                   LEFT JOIN organisations o ON l.organisation_id = o.id
                   $whereClause GROUP BY a.id ORDER BY a.asset_number LIMIT ? OFFSET ?", $params);
+}
+
+/**
+ * Onthoudt de zoekterm/filters/pagina van het laatste bezoek aan het
+ * assetoverzicht (modules/assets/index.php), zodat je na het bekijken of
+ * bewerken van een asset via "← Terug" weer terugkomt op precies dezelfde
+ * zoekresultaten in plaats van een leeg, gereset overzicht. Op verzoek van
+ * Ton: "als je iets opgezocht hebt en het is niet wat je zocht ... is het
+ * mogelijk dat je terugkeert naar de laatste zoekactie?"
+ */
+function rememberAssetsListState(string $queryString): void {
+    $_SESSION['assets_list_query'] = $queryString;
+}
+
+/**
+ * Geeft de URL naar het assetoverzicht met de laatst onthouden
+ * zoekopdracht/filters/pagina (zie rememberAssetsListState()), of gewoon
+ * het lege overzicht als er nog niets onthouden is. Let op: de teruggegeven
+ * URL bevat de eerder ingevoerde zoekterm, dus altijd met htmlspecialchars()
+ * uitvoeren in een href-attribuut.
+ */
+function getAssetsListUrl(): string {
+    $queryString = $_SESSION['assets_list_query'] ?? '';
+    return BASE_URL . '/modules/assets/' . ($queryString !== '' ? '?' . $queryString : '');
 }
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────

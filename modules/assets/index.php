@@ -80,6 +80,10 @@ $filters = [
     'room'   => $_GET['room'] ?? '',
 ];
 
+// Onthoud deze zoekopdracht/filters/pagina, zodat "← Terug" vanaf een
+// asset-detailpagina hier weer op uitkomt (zie getAssetsListUrl()).
+rememberAssetsListState($_SERVER['QUERY_STRING'] ?? '');
+
 // Paginering
 $perPage     = (int)($_GET['per_page'] ?? 50);
 $validPerPage = [25, 50, 100, 250, 500];
@@ -146,7 +150,7 @@ include __DIR__ . '/../../templates/header.php';
         <form method="GET">
             <div style="display:grid;grid-template-columns:1fr auto;gap:8px;margin-bottom:8px;">
                 <input type="text" name="search" class="form-control"
-                       placeholder="Zoek op nummer, merk, model..."
+                       placeholder="Zoek op nummer, merk, model, telefoonnummer, ruimte, aankoopdatum, ..."
                        value="<?= htmlspecialchars($search) ?>">
                 <button type="submit" class="btn btn-secondary">🔍</button>
             </div>
