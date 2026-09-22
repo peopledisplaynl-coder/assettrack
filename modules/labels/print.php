@@ -248,6 +248,31 @@ $neededTextMm = 12 * $estCharWidthMm + 2; // +2mm speling voor padding/rand
 $maxCodeMm = max(8, $wMm - $neededTextMm); // nooit kleiner dan 8mm, anders onscanbaar
 $sideCodeFlexPct = (int) max(20, min(38, round($maxCodeMm / $wMm * 100)));
 
+// AANVULLING (2026-09-22, tweede testronde op A4 65/vel): een echte
+// test-print van Ton liet zien dat de code met de vaste 78% hierboven juist
+// veel TE GROOT werd en buiten het label viel. Oorzaak: een aparte CSS-bug
+// (zie de ".label-stacked .label-right > div"-regel verderop) waardoor de
+// QR-afbeelding zich alleen naar de BREEDTE van zijn vak voegde, niet naar
+// de (veel kleinere) hoogte -- op een liggend label als dit (breder dan
+// hoog) werd de code daardoor zo groot als de volle breedte toestond, ver
+// voorbij de hoogte die er nog over was. Die CSS-bug is hieronder opgelost,
+// maar daarmee wordt een vast percentage voor dit extreme formaat ook
+// meteen te KLEIN: er wordt dan twee keer een "veilige rand" afgetrokken
+// (rond het hele label, én rond het code-vak zelf), wat op een label van
+// maar 21,2mm hoog zwaar doorweegt. Daarom hier, alleen voor een QR-code
+// (geen streepjescode) op een piepklein formaat, een berekening zoals bij
+// $sideCodeFlexPct hierboven: hoeveel hoogte heeft de ENE tekstregel (het
+// assetnummer) daadwerkelijk nodig, en geef de code al het overige -- met
+// een veel kleinere eigen rand rond het code-vak zelf ($tinyCodePadMm),
+// want het label heeft via $safeEdgeMm al een veilige rand aan de buitenkant.
+$tinyCodePadMm = $safeEdgeMm; // standaard: net als ieder ander gestapeld formaat
+if ($isTiny && $codeType !== 'barcode') {
+    $tinyTextRowMm   = $assetNrFontMm * 1.1 + 0.6; // regelhoogte (line-height 1.1) + kleine marge
+    $tinyAvailableMm = $hMm - 2 * $safeEdgeMm;
+    $codeFlexPct     = (int) max(50, min(90, round((($tinyAvailableMm - $tinyTextRowMm) / $tinyAvailableMm) * 100)));
+    $tinyCodePadMm   = 0.3;
+}
+
 // Zelfs de volle labelbreedte is op een portrait-label (bv. 36mm) vaak te
 // weinig voor een leesbare streepjescode. In dat geval draaien we alleen de
 // streepjescode-afbeelding 90° binnen zijn eigen vak, zodat hij de langere as
@@ -391,12 +416,39 @@ body { font-family: Arial, Helvetica, sans-serif; background:#f3f4f6; font-size:
     height: auto !important;
     display: block;
 }
+/* Iets ruimer dan de algemene 90% hierboven, specifiek voor het piepkleine
+   formaat ($isTiny) -- die heeft door $tinyCodePadMm al een veel kleinere
+   eigen rand om het code-vak, dus kan de code-afbeelding zelf ook een groter
+   deel van dat vak vullen. Zelfde specificiteit als de regel hierboven, dus
+   wint via cascade omdat hij later in de bron staat -- alleen van toepassing
+   als de img ook de "qrbox-tiny"-klasse heeft (zie de markup verderop). */
+.qrbox-tiny img {
+    max-width: 96% !important;
+    max-height: 96% !important;
+}
 .label-stacked .label-right svg {
     max-width: 100% !important;
     max-height: 100% !important;
     width: 100% !important;
     height: 100% !important;
     display: block;
+}
+/* De QRCode.js-bibliotheek plaatst de QR-afbeelding in een eigen wrapper-div
+   (nodig voor de library, anders dan een streepjescode die direct als <svg>
+   in .label-right staat). Die wrapper-div had tot nu toe GEEN eigen
+   breedte/hoogte -- de breedte werd impliciet beperkt door flexbox, maar de
+   hoogte bleef "auto" (content-based). Daardoor kon het percentage in
+   "max-height: 90%" op de afbeelding hierboven niet resolven (een
+   hoogte-percentage tegen een auto-hoogte ouder telt in CSS als "none"), en
+   werd de (vierkante) QR-afbeelding alleen door haar BREEDTE begrensd. Op een
+   liggend label (breder dan hoog), zoals het piepkleine A4 65/vel-formaat in
+   gestapelde stand, werd de code daardoor veel te GROOT en viel hij buiten
+   zijn vak -- exact wat Ton's testprint liet zien. Met een expliciete
+   breedte/hoogte van 100% op de wrapper-div werken beide max-width/max-height
+   regels op de afbeelding weer betrouwbaar. */
+.label-stacked .label-right > div {
+    width: 100%;
+    height: 100%;
 }
 /* Stapel-layout: tekst boven, code eronder over de volle breedte i.p.v.
    tekst-links/code-rechts. Gebruikt bij een streepjescode (van nature
@@ -417,7 +469,7 @@ body { font-family: Arial, Helvetica, sans-serif; background:#f3f4f6; font-size:
     max-width: none;
     max-height: none;
     width: 100%;
-    padding: <?= $safeEdgeMm ?>mm;
+    padding: <?= $tinyCodePadMm ?>mm;
 }
 /* Streepjescode op een portrait-label: het vak zelf blijft normaal (volle
    breedte, vast hoogte-aandeel), maar de code-afbeelding erbinnen wordt 90°
@@ -526,7 +578,7 @@ foreach ($pages as $pageAssets):
                 <svg id="<?= $codeId ?>"></svg>
                 <?php endif; ?>
             <?php else: ?>
-            <div id="<?= $codeId ?>"></div>
+            <div id="<?= $codeId ?>"<?= ($isTiny && $codeType !== 'barcode') ? ' class="qrbox-tiny"' : '' ?>></div>
             <?php endif; ?>
         </div>
         <?php endif; ?>

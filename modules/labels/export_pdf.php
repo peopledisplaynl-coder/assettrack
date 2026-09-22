@@ -140,10 +140,11 @@ $qrPx = (int)max(300, min(900, round($fontBasisMm * 14)));
 // Barcode (Code128): vaste lage brongrootte zodat de beeldverhouding
 // breed-en-laag blijft — zie print.php.
 $barcodeHeightPx = 55;
-// Op een piepklein, gestapeld label ($isTiny) staat er nu nog maar één regel
-// tekst (het assetnummer) boven de code -- die heeft veel minder van de
-// labelhoogte nodig dan de gebruikelijke 42/58%, dus de code krijgt het
-// grootste deel van de resterende ruimte.
+// Aandeel van de labelhoogte gereserveerd voor de code bij een gestapelde
+// layout: een streepjescode heeft meer ruimte nodig dan een QR-code. Voor een
+// piepklein formaat ($isTiny) is dit een voorlopige schatting -- hieronder
+// (na het berekenen van $assetNrFontMm) wordt dit voor een QR-code op zo'n
+// formaat vervangen door een preciezere berekening.
 $codeFlexPct = $isTiny
     ? ($codeType === 'barcode' ? 82 : 78)
     : ($codeType === 'barcode' ? 58 : 42);
@@ -158,6 +159,31 @@ $estCharWidthMm = $assetNrFontMm * 0.62;
 $neededTextMm = 12 * $estCharWidthMm + 2;
 $maxCodeMm = max(8, $wMm - $neededTextMm);
 $sideCodeFlexPct = (int) max(20, min(38, round($maxCodeMm / $wMm * 100)));
+
+// AANVULLING (2026-09-22, tweede testronde op A4 65/vel): een echte
+// test-print van Ton liet zien dat de code met de vaste 78% hierboven juist
+// veel TE GROOT werd en buiten het label viel. Oorzaak: een aparte CSS-bug
+// (zie de ".label-stacked .label-right > div"-regel verderop) waardoor de
+// QR-afbeelding zich alleen naar de BREEDTE van zijn vak voegde, niet naar
+// de (veel kleinere) hoogte -- op een liggend label als dit (breder dan
+// hoog) werd de code daardoor zo groot als de volle breedte toestond, ver
+// voorbij de hoogte die er nog over was. Die CSS-bug is hieronder opgelost,
+// maar daarmee wordt een vast percentage voor dit extreme formaat ook
+// meteen te KLEIN: er wordt dan twee keer een "veilige rand" afgetrokken
+// (rond het hele label, én rond het code-vak zelf), wat op een label van
+// maar 21,2mm hoog zwaar doorweegt. Daarom hier, alleen voor een QR-code
+// (geen streepjescode) op een piepklein formaat, een berekening zoals bij
+// $sideCodeFlexPct hierboven: hoeveel hoogte heeft de ENE tekstregel (het
+// assetnummer) daadwerkelijk nodig, en geef de code al het overige -- met
+// een veel kleinere eigen rand rond het code-vak zelf ($tinyCodePadMm),
+// want het label heeft via $safeEdgeMm al een veilige rand aan de buitenkant.
+$tinyCodePadMm = $safeEdgeMm; // standaard: net als ieder ander gestapeld formaat
+if ($isTiny && $codeType !== 'barcode') {
+    $tinyTextRowMm   = $assetNrFontMm * 1.1 + 0.6; // regelhoogte (line-height 1.1) + kleine marge
+    $tinyAvailableMm = $hMm - 2 * $safeEdgeMm;
+    $codeFlexPct     = (int) max(50, min(90, round((($tinyAvailableMm - $tinyTextRowMm) / $tinyAvailableMm) * 100)));
+    $tinyCodePadMm   = 0.3;
+}
 
 // Streepjescode op een portrait-label: draai alleen de code-afbeelding 90°
 // binnen zijn vak — zie print.php.
@@ -234,7 +260,28 @@ body { font-family:Arial,Helvetica,sans-serif; font-size:<?= $fontMm ?>mm; backg
 /* 90% i.p.v. 100% -- extra paar mm eigen witruimte rond de QR-code, los van
    de rand-marge van het label zelf -- zie print.php voor de uitleg. */
 .label-right img { max-width:90% !important; max-height:90% !important; width:auto !important; height:auto !important; display:block; }
+/* Iets ruimer dan de algemene 90% hierboven, specifiek voor het piepkleine
+   formaat ($isTiny) -- die heeft door $tinyCodePadMm al een veel kleinere
+   eigen rand om het code-vak, dus kan de code-afbeelding zelf ook een groter
+   deel van dat vak vullen. Zelfde specificiteit als de regel hierboven, dus
+   wint via cascade omdat hij later in de bron staat -- alleen van toepassing
+   als de img ook de "qrbox-tiny"-klasse heeft (zie de markup verderop). */
+.qrbox-tiny img { max-width:96% !important; max-height:96% !important; }
 .label-stacked .label-right svg { max-width:100% !important; max-height:100% !important; width:100% !important; height:100% !important; display:block; }
+/* De QRCode.js-bibliotheek plaatst de QR-afbeelding in een eigen wrapper-div
+   (nodig voor de library, anders dan een streepjescode die direct als <svg>
+   in .label-right staat). Die wrapper-div had tot nu toe GEEN eigen
+   breedte/hoogte -- de breedte werd impliciet beperkt door flexbox, maar de
+   hoogte bleef "auto" (content-based). Daardoor kon het percentage in
+   "max-height:90%" op de afbeelding hierboven niet resolven (een
+   hoogte-percentage tegen een auto-hoogte ouder telt in CSS als "none"), en
+   werd de (vierkante) QR-afbeelding alleen door haar BREEDTE begrensd. Op een
+   liggend label (breder dan hoog), zoals het piepkleine A4 65/vel-formaat in
+   gestapelde stand, werd de code daardoor veel te GROOT en viel hij buiten
+   zijn vak -- exact wat Ton's testprint liet zien. Met een expliciete
+   breedte/hoogte van 100% op de wrapper-div werken beide max-width/max-height
+   regels op de afbeelding weer betrouwbaar. */
+.label-stacked .label-right > div { width:100%; height:100%; }
 /* Stapel-layout: tekst boven, code eronder over de volle breedte i.p.v.
    tekst-links/code-rechts -- zie print.php voor de volledige uitleg. */
 .label-stacked { flex-direction:column; align-items:stretch; }
@@ -244,7 +291,7 @@ body { font-family:Arial,Helvetica,sans-serif; font-size:<?= $fontMm ?>mm; backg
     white-space:normal; overflow-wrap:break-word; text-overflow:clip;
     display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
 }
-.label-stacked .label-right { flex:0 0 <?= $codeFlexPct ?>%; max-width:none; max-height:none; width:100%; padding:<?= $safeEdgeMm ?>mm; }
+.label-stacked .label-right { flex:0 0 <?= $codeFlexPct ?>%; max-width:none; max-height:none; width:100%; padding:<?= $tinyCodePadMm ?>mm; }
 /* Streepjescode op een portrait-label: de code-afbeelding wordt 90° gedraaid
    binnen zijn vak -- zie print.php voor de uitleg. */
 .barcode-rotate-wrap { width:<?= $codeBoxHMm ?>mm; height:<?= $codeBoxWMm ?>mm; transform:rotate(90deg); }
@@ -301,7 +348,7 @@ foreach ($pages as $pageAssets):
                 <svg id="<?= $codeId ?>"></svg>
                 <?php endif; ?>
             <?php else: ?>
-            <div id="<?= $codeId ?>"></div>
+            <div id="<?= $codeId ?>"<?= ($isTiny && $codeType !== 'barcode') ? ' class="qrbox-tiny"' : '' ?>></div>
             <?php endif; ?>
         </div>
         <?php endif; ?>
