@@ -139,11 +139,29 @@ $wMm = (float)$size['w'];
 // elkaar zetten.
 $isPortrait = $hMm > $wMm;
 
+// Piepklein formaat (op dit moment alleen A4 65/vel, 38,1x21,2mm): een echte
+// testprint van Ton (2026-09-22) liet zien dat de QR-code op dit formaat met
+// de gewone lay-out (code naast de tekst, in een smalle kolom) te klein/dicht
+// werd om nog te scannen -- ook al stond er verder niets anders dan het
+// assetnummer bij. Net als bij de Dymo 11355/Fichero-formaten (zie index.php,
+// $maxFields) is er op zo'n klein label domweg geen ruimte voor code NAAST
+// tekst. Voor deze formaten forceren we daarom (a) altijd de gestapelde
+// lay-out hieronder en (b) alleen assetnummer + code, ook als er per ongeluk
+// toch een extra veld werd meegepost -- exact Tons eigen conclusie na zijn
+// testprint.
+$tinyFormats = ['a4_65'];
+$isTiny = in_array($format, $tinyFormats, true);
+if ($isTiny) {
+    foreach (['show_company','show_location','show_brand_model','show_serial','show_room','show_status','show_ip'] as $tf) {
+        $showFields[$tf] = false;
+    }
+}
+
 // Stapel-layout (tekst boven, code eronder, code over de volle breedte):
 // altijd bij een streepjescode (van nature breed-en-laag, past niet naast een
-// tekstkolom), en ook bij een portrait-label (te smal voor twee kolommen naast
-// elkaar, ongeacht codetype).
-$stacked = $codeType === 'barcode' || $isPortrait;
+// tekstkolom), bij een portrait-label (te smal voor twee kolommen naast
+// elkaar, ongeacht codetype), en bij een piepklein formaat ($isTiny hierboven).
+$stacked = $isTiny || $codeType === 'barcode' || $isPortrait;
 
 // Lettergrootte in mm, gebaseerd op de KRAPSTE afmeting van het label (bij de
 // meeste bestaande formaten is dat de hoogte, bij een portrait-label zoals de
@@ -180,8 +198,14 @@ $qrPx = (int)max(300, min(900, round($fontBasisMm * 14)));
 $barcodeHeightPx = 55;
 
 // Aandeel van de labelhoogte gereserveerd voor de code bij een gestapelde
-// layout: een streepjescode heeft meer ruimte nodig dan een QR-code.
-$codeFlexPct = $codeType === 'barcode' ? 58 : 42;
+// layout: een streepjescode heeft meer ruimte nodig dan een QR-code. Op een
+// piepklein, gestapeld label ($isTiny) staat er nog maar één regel tekst (het
+// assetnummer) boven de code -- die heeft veel minder van de labelhoogte
+// nodig dan de gebruikelijke 42/58%, dus de code krijgt het grootste deel van
+// de resterende ruimte.
+$codeFlexPct = $isTiny
+    ? ($codeType === 'barcode' ? 82 : 78)
+    : ($codeType === 'barcode' ? 58 : 42);
 
 // Aandeel van de labelBREEDTE gereserveerd voor de code bij de NIET-gestapelde
 // (naast-elkaar) layout -- dit gebeurt alleen bij een QR-code op een liggend
@@ -455,6 +479,7 @@ body { font-family: Arial, Helvetica, sans-serif; background:#f3f4f6; font-size:
     <span style="opacity:0.75;font-size:12px;">
         <?= count($assets) ?> label(s) —
         <?= count($pages) ?> pagina('s)
+        <?php if ($isTiny): ?> — ℹ️ klein formaat: alleen assetnummer + code, groter afgedrukt<?php endif; ?>
     </span>
 </div>
 

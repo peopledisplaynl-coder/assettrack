@@ -101,7 +101,26 @@ $wMm  = (float)$size['w'];
 
 // Portrait (smal-en-lang) labels — zie print.php voor de uitleg.
 $isPortrait = $hMm > $wMm;
-$stacked    = $codeType === 'barcode' || $isPortrait;
+
+// Piepklein formaat (op dit moment alleen A4 65/vel, 38,1x21,2mm): een echte
+// testprint van Ton (2026-09-22) liet zien dat de QR-code op dit formaat met
+// de gewone lay-out (code naast de tekst, in een smalle kolom) te klein/dicht
+// werd om nog te scannen -- ook al stond er verder niets anders dan het
+// assetnummer bij. Net als bij de Dymo 11355/Fichero-formaten (zie index.php,
+// $maxFields) is er op zo'n klein label domweg geen ruimte voor code NAAST
+// tekst. Voor deze formaten forceren we daarom (a) altijd de gestapelde
+// lay-out (tekst op één regel boven, code eronder over de volle breedte) en
+// (b) alleen assetnummer + code, ook als er per ongeluk toch een extra veld
+// werd meegepost -- exact Tons eigen conclusie na zijn testprint.
+$tinyFormats = ['a4_65'];
+$isTiny = in_array($format, $tinyFormats, true);
+if ($isTiny) {
+    foreach (['show_company','show_location','show_brand_model','show_serial','show_room','show_status','show_ip'] as $tf) {
+        $showFields[$tf] = false;
+    }
+}
+
+$stacked = $isTiny || $codeType === 'barcode' || $isPortrait;
 
 // Lettergrootte in mm, gebaseerd op de krapste afmeting — zie print.php.
 $fontBasisMm = min($wMm, $hMm);
@@ -121,7 +140,13 @@ $qrPx = (int)max(300, min(900, round($fontBasisMm * 14)));
 // Barcode (Code128): vaste lage brongrootte zodat de beeldverhouding
 // breed-en-laag blijft — zie print.php.
 $barcodeHeightPx = 55;
-$codeFlexPct = $codeType === 'barcode' ? 58 : 42;
+// Op een piepklein, gestapeld label ($isTiny) staat er nu nog maar één regel
+// tekst (het assetnummer) boven de code -- die heeft veel minder van de
+// labelhoogte nodig dan de gebruikelijke 42/58%, dus de code krijgt het
+// grootste deel van de resterende ruimte.
+$codeFlexPct = $isTiny
+    ? ($codeType === 'barcode' ? 82 : 78)
+    : ($codeType === 'barcode' ? 58 : 42);
 // Aandeel van de labelBREEDTE gereserveerd voor de code bij de NIET-gestapelde
 // (naast-elkaar) layout -- fix voor de te-grote-QR/afgekapte-tekst bug, zie
 // de uitgebreide toelichting in print.php bij dezelfde variabele. AANVULLING
@@ -246,6 +271,7 @@ body { font-family:Arial,Helvetica,sans-serif; font-size:<?= $fontMm ?>mm; backg
     <?= count($assets) ?> label(s), <?= count($pages) ?> pagina('s) — <?= date('d-m-Y H:i') ?><br>
     Open in browser → <strong>Ctrl+P</strong> → <strong>Opslaan als PDF</strong>
     <?php if (!$isA4): ?> | Paginaformaat: <strong><?= $size['w'] ?> × <?= $size['h'] ?></strong><?= $rotate ? ' (90° gedraaid)' : '' ?><?php endif; ?>
+    <?php if ($isTiny): ?><br>ℹ️ Klein formaat: er wordt alleen het assetnummer + de <?= $codeType==='barcode'?'streepjescode':'QR-code' ?> getoond (groter afgedrukt), voor een leesbare/scanbare code.<?php endif; ?>
 </div>
 
 <?php

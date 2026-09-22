@@ -55,7 +55,7 @@ $labelFormats = [
         'a4_21'  => 'A4 — 21 labels per vel (70×42mm)',
         'a4_24'  => 'A4 — 24 labels per vel (66×34mm)',
         'a4_40'  => 'A4 — 40 labels per vel (48×25mm)',
-        'a4_65'  => 'A4 — 65 labels per vel (38×21mm)',
+        'a4_65'  => 'A4 — 65 labels per vel (38×21mm) — minimalistisch: alleen assetnummer + code',
     ],
     // Op verzoek van Ton (2026-09-19): een Fichero Mini Pocket Printer type 5836,
     // een Bluetooth-labelprinter die alleen via zijn eigen telefoon-app bediend
@@ -93,7 +93,14 @@ $maxFields = [
     'a4_21'         => 7,
     'a4_24'         => 6,
     'a4_40'         => 4,
-    'a4_65'         => 3,
+    // Op verzoek van Ton (2026-09-22): na een echte testprint bleek de QR-code
+    // op dit formaat (38,1x21,2mm -- zelfs kleiner dan de Dymo 11355 hierboven)
+    // te klein/dicht om te scannen zodra er ook nog extra velden bij stonden.
+    // Nu -- net als bij Dymo 11355/Fichero -- bewust minimalistisch: alleen
+    // assetnummer + code. Zie export_pdf.php/print.php voor de bijbehorende
+    // lay-out-aanpassing (gestapeld, code krijgt het grootste deel van de
+    // labelhoogte i.p.v. een smalle kolom naast de tekst).
+    'a4_65'         => 0,
     // Bewust minimalistisch, net als de Dymo 11355 hierboven -- 30x14mm is
     // fysiek te klein voor meer dan assetnummer + code.
     'fichero_5836'  => 0,
