@@ -21,7 +21,22 @@ function isValidIP(string $ip): bool {
 }
 
 function isValidMAC(string $mac): bool {
-    return preg_match('/^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/', $mac) === 1;
+    // Accepteert met dubbele punt (aa:bb:...), met streepje (aa-bb-...) én
+    // helemaal zonder scheidingsteken (aabbccddeeff) -- dat laatste stond al
+    // in de handleiding als toegestaan, maar werd hier voorheen afgewezen.
+    return preg_match('/^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/', $mac) === 1
+        || preg_match('/^[0-9A-Fa-f]{12}$/', $mac) === 1;
+}
+
+// Normaliseert een geldig MAC-adres (met of zonder scheidingstekens) naar het
+// vaste weergaveformaat AA:BB:CC:DD:EE:FF, zodat opgeslagen adressen er altijd
+// hetzelfde uitzien, ongeacht hoe ze zijn aangeleverd (import, handmatig, met
+// streepjes, etc.). Geeft de input ongewijzigd terug als deze geen geldig MAC-
+// adres is (roep dus altijd eerst isValidMAC() aan om dat te controleren).
+function normalizeMAC(string $mac): string {
+    if (!isValidMAC($mac)) return $mac;
+    $hex = strtoupper(str_replace([':', '-'], '', $mac));
+    return implode(':', str_split($hex, 2));
 }
 
 // ─── Datum functies ───────────────────────────────────────────────────────────
@@ -573,10 +588,15 @@ function validateAssetRow(array $data, int $locationId): array {
         $data['status'] = 'Beschikbaar';
     }
 
-    // Valideer MAC adres
-    if (!empty($data['mac_address']) && !isValidMAC($data['mac_address'])) {
-        $warnings[] = "Ongeldig MAC adres: " . $data['mac_address'];
-        $data['mac_address'] = '';
+    // Valideer MAC adres (met of zonder scheidingstekens toegestaan, zie isValidMAC()) --
+    // wordt bij een geldig adres genormaliseerd naar AA:BB:CC:DD:EE:FF.
+    if (!empty($data['mac_address'])) {
+        if (!isValidMAC($data['mac_address'])) {
+            $warnings[] = "Ongeldig MAC adres: " . $data['mac_address'];
+            $data['mac_address'] = '';
+        } else {
+            $data['mac_address'] = normalizeMAC($data['mac_address']);
+        }
     }
 
     // Valideer IP adressen

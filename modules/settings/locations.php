@@ -82,6 +82,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrfToken($_POST['csrf_token'
             $success = "Organisatie bijgewerkt."; $editId = 0;
         }
     }
+    if ($pa === 'org_delete') {
+        $rid = (int)($_POST['record_id'] ?? 0);
+        if ($rid) {
+            $org = queryOne("SELECT name FROM organisations WHERE id=?", [$rid]);
+            $locCount = (int)(queryOne("SELECT COUNT(*) as n FROM locations WHERE organisation_id=? AND active=1", [$rid])['n'] ?? 0);
+            if (!$org) {
+                $errors[] = 'Organisatie niet gevonden.';
+            } elseif ($locCount > 0) {
+                $errors[] = "Kan '{$org['name']}' niet verwijderen: er " . ($locCount === 1 ? 'is nog 1 locatie' : "zijn nog $locCount locaties") . " aan gekoppeld. Verwijder eerst de locatie(s).";
+            } else {
+                execute("UPDATE organisations SET active=0 WHERE id=?", [$rid]);
+                $success = "Organisatie '{$org['name']}' verwijderd.";
+            }
+        }
+    }
 
     // Locaties
     if ($pa === 'loc_add') {
@@ -112,6 +127,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrfToken($_POST['csrf_token'
             $success = "Locatie bijgewerkt."; $editId = 0;
         }
     }
+    if ($pa === 'loc_delete') {
+        $rid = (int)($_POST['record_id'] ?? 0);
+        if ($rid) {
+            $loc = queryOne("SELECT name FROM locations WHERE id=?", [$rid]);
+            $roomCount  = (int)(queryOne("SELECT COUNT(*) as n FROM rooms WHERE location_id=? AND active=1", [$rid])['n'] ?? 0);
+            $assetCount = (int)(queryOne("SELECT COUNT(*) as n FROM assets WHERE location_id=?", [$rid])['n'] ?? 0);
+            if (!$loc) {
+                $errors[] = 'Locatie niet gevonden.';
+            } elseif ($roomCount > 0 || $assetCount > 0) {
+                $parts = [];
+                if ($assetCount > 0) $parts[] = ($assetCount === 1 ? '1 asset' : "$assetCount assets");
+                if ($roomCount  > 0) $parts[] = ($roomCount  === 1 ? '1 ruimte' : "$roomCount ruimtes");
+                $errors[] = "Kan '{$loc['name']}' niet verwijderen: er staan nog " . implode(' en ', $parts) . " aan gekoppeld.";
+            } else {
+                execute("UPDATE locations SET active=0 WHERE id=?", [$rid]);
+                $success = "Locatie '{$loc['name']}' verwijderd.";
+            }
+        }
+    }
 
     // Ruimtes
     if ($pa === 'room_add') {
@@ -137,7 +171,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCsrfToken($_POST['csrf_token'
     }
     if ($pa === 'room_delete') {
         $rid = (int)($_POST['record_id'] ?? 0);
-        if ($rid) { execute("UPDATE rooms SET active=0 WHERE id=?", [$rid]); $success = "Ruimte verwijderd."; }
+        if ($rid) {
+            $room = queryOne("SELECT name, location_id FROM rooms WHERE id=?", [$rid]);
+            if (!$room) {
+                $errors[] = 'Ruimte niet gevonden.';
+            } else {
+                // Assets verwijzen naar een ruimte via de vrije-tekst kolom assets.room
+                // (gematcht op locatie + naam), niet via een echte foreign key -- vandaar
+                // deze controle in plaats van een simpele COUNT op een room_id-kolom.
+                $assetCount = (int)(queryOne(
+                    "SELECT COUNT(*) as n FROM assets WHERE location_id=? AND room=?",
+                    [$room['location_id'], $room['name']]
+                )['n'] ?? 0);
+                if ($assetCount > 0) {
+                    $errors[] = "Kan '{$room['name']}' niet verwijderen: er " . ($assetCount === 1 ? 'staat nog 1 asset' : "staan nog $assetCount assets") . " in deze ruimte.";
+                } else {
+                    execute("UPDATE rooms SET active=0 WHERE id=?", [$rid]);
+                    $success = "Ruimte '{$room['name']}' verwijderd.";
+                }
+            }
+        }
     }
 }
 
@@ -202,7 +255,15 @@ if ($action === 'organisations'): ?>
             <td><strong><?= htmlspecialchars($org['name']) ?></strong>
                 <?php if($org['email']): ?><div style="font-size:0.75rem;color:#94a3b8;"><?= htmlspecialchars($org['email']) ?></div><?php endif; ?></td>
             <td><?= htmlspecialchars($org['city']??'') ?></td>
-            <td><a href="?action=organisations&edit=<?= $org['id'] ?>" class="btn btn-sm btn-secondary">✏️ Bewerken</a></td>
+            <td><div style="display:flex;gap:5px;">
+                <a href="?action=organisations&edit=<?= $org['id'] ?>" class="btn btn-sm btn-secondary">✏️ Bewerken</a>
+                <form method="POST" style="margin:0;">
+                    <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
+                    <input type="hidden" name="post_action" value="org_delete">
+                    <input type="hidden" name="record_id" value="<?= $org['id'] ?>">
+                    <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Organisatie &quot;<?= htmlspecialchars(addslashes($org['name'])) ?>&quot; verwijderen?')">🗑️</button>
+                </form>
+            </div></td>
         </tr>
         <?php endforeach; ?>
         <?php if(empty($organisations)): ?><tr><td colspan="4" style="text-align:center;padding:30px;color:#94a3b8;">Nog geen organisaties.</td></tr><?php endif; ?>
@@ -262,7 +323,15 @@ elseif ($action === 'locations'): ?>
                 <?php endif; ?></td>
             <td><?= htmlspecialchars($loc['org_name']) ?></td>
             <td><?= htmlspecialchars($loc['city']??'') ?></td>
-            <td><a href="?action=locations&edit=<?= $loc['id'] ?>" class="btn btn-sm btn-secondary">✏️ Bewerken</a></td>
+            <td><div style="display:flex;gap:5px;">
+                <a href="?action=locations&edit=<?= $loc['id'] ?>" class="btn btn-sm btn-secondary">✏️ Bewerken</a>
+                <form method="POST" style="margin:0;">
+                    <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
+                    <input type="hidden" name="post_action" value="loc_delete">
+                    <input type="hidden" name="record_id" value="<?= $loc['id'] ?>">
+                    <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Locatie &quot;<?= htmlspecialchars(addslashes($loc['name'])) ?>&quot; verwijderen?')">🗑️</button>
+                </form>
+            </div></td>
         </tr>
         <?php endforeach; ?>
         <?php if(empty($locations)): ?><tr><td colspan="5" style="text-align:center;padding:30px;color:#94a3b8;">Nog geen locaties.</td></tr><?php endif; ?>

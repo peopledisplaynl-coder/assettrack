@@ -269,6 +269,23 @@ CREATE TABLE IF NOT EXISTS kb_article_assets (
     FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE
 );
 
+-- "Onthoud mij" (30 dagen ingelogd blijven) -- los van de gewone PHP-sessie, zodat
+-- een gebruiker automatisch weer wordt ingelogd zolang deze token geldig is, ook
+-- als de sessie zelf is verlopen (8 uur inactiviteit) of door de server is
+-- opgeruimd. Selector/validator-opzet: de selector is de publieke zoeksleutel
+-- (indexeerbaar), de validator wordt alleen gehashed opgeslagen (nooit in
+-- platte tekst) en bij elk gebruik geroteerd (nieuw token, oude verwijderd).
+CREATE TABLE IF NOT EXISTS remember_tokens (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    selector VARCHAR(24) NOT NULL,
+    validator_hash VARCHAR(64) NOT NULL,
+    expires_at DATETIME NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_selector (selector),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
 -- ─── Standaard permissies ────────────────────────────────────────────────────
 
 INSERT IGNORE INTO role_permissions (role, permission_key, enabled) VALUES

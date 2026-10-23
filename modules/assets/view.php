@@ -478,6 +478,16 @@ $parentRelations = query(
                     <span style="font-size:0.75rem;background:#bfdbfe;color:#1e40af;padding:2px 8px;border-radius:4px;">
                         ↑ <?= $rt['label'] ?>
                     </span>
+                    <?php if (hasPermission('edit_assets')): ?>
+                    <form method="POST" action="<?= BASE_URL ?>/modules/assets/relations.php" style="margin:0;">
+                        <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
+                        <input type="hidden" name="action" value="delete">
+                        <input type="hidden" name="relation_id" value="<?= $rel['rel_id'] ?>">
+                        <input type="hidden" name="asset_id" value="<?= $asset['id'] ?>">
+                        <button type="submit" onclick="return confirm('Koppeling verwijderen?')"
+                                style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:1.1rem;">✕</button>
+                    </form>
+                    <?php endif; ?>
                 </div>
                 <?php endforeach; ?>
             </div>

@@ -32,14 +32,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) {
         $errors[] = 'Ongeldige aanvraag. Probeer opnieuw.';
     } else {
-        $username = trim($_POST['username'] ?? '');
-        $password = $_POST['password'] ?? '';
+        $username   = trim($_POST['username'] ?? '');
+        $password   = $_POST['password'] ?? '';
+        $rememberMe = isset($_POST['remember_me']);
 
         if (empty($username)) $errors[] = 'Gebruikersnaam of e-mail is verplicht.';
         if (empty($password)) $errors[] = 'Wachtwoord is verplicht.';
 
         if (empty($errors)) {
-            if (login($username, $password)) {
+            if (login($username, $password, $rememberMe)) {
                 // Kwam de gebruiker hier via een niet-ingelogde scan van een
                 // QR-code/label (zie modules/assets/scan.php)? Dan sturen we
                 // na het inloggen terug naar precies dat device i.p.v. altijd
@@ -68,7 +69,10 @@ $fontSlug = urlencode(preg_replace('/[^a-zA-Z0-9 ]/', '', $themeFont));
 <title><?= htmlspecialchars($appName) ?> — Inloggen</title>
 <meta name="theme-color" content="<?= $themeSecondary ?>">
 <link rel="manifest" href="./manifest.json">
-<link rel="apple-touch-icon" href="<?= BASE_URL ?>/assets/img/icon-192.png">
+<link rel="icon" href="<?= BASE_URL ?>/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="<?= BASE_URL ?>/assets/img/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="<?= BASE_URL ?>/assets/img/favicon-16x16.png">
+<link rel="apple-touch-icon" href="<?= BASE_URL ?>/assets/img/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="<?= htmlspecialchars($appName) ?>">
@@ -335,6 +339,18 @@ body {
                 <input type="password" id="password" name="password" class="form-control"
                        placeholder="Voer je wachtwoord in"
                        autocomplete="current-password">
+            </div>
+            <div class="form-group" style="margin-bottom:8px;">
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <input type="checkbox" id="remember_me" name="remember_me" value="1"
+                           style="width:16px;height:16px;cursor:pointer;">
+                    <label for="remember_me" style="margin:0;font-weight:500;color:#374151;cursor:pointer;">
+                        30 dagen ingelogd blijven op dit apparaat
+                    </label>
+                </div>
+                <p style="margin:6px 0 0 24px;font-size:0.78rem;color:#94a3b8;">
+                    Gebruik dit niet op een gedeeld of publiek apparaat.
+                </p>
             </div>
             <button type="submit" class="btn-login">Inloggen →</button>
         </form>

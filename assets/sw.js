@@ -1,11 +1,23 @@
-const CACHE_NAME = 'assettrack-v1';
+// BASE afleiden uit de eigen locatie van dit script (in plaats van hardcoded
+// vanaf de domeinroot) -- zo werkt de precache ook correct als AssetTrack in
+// een submap draait (bijv. https://domein.nl/assettrack/), niet alleen op de
+// domeinroot. Dit script staat altijd op "<BASE>/assets/sw.js".
+const BASE = self.location.pathname.replace(/\/assets\/sw\.js$/, '');
+
+const CACHE_NAME = 'assettrack-v2';
 const ASSETS_TO_CACHE = [
-    '/manifest.json',
-    '/assets/css/style.css',
-    '/assets/js/app.js',
-    '/index.php',
-    '/assets/img/icon-192.png',
-    '/assets/img/icon-512.png'
+    BASE + '/manifest.json',
+    BASE + '/assets/css/style.css',
+    BASE + '/assets/js/app.js',
+    BASE + '/index.php',
+    BASE + '/assets/img/icon-192.png',
+    BASE + '/assets/img/icon-512.png',
+    BASE + '/assets/img/icon-192-maskable.png',
+    BASE + '/assets/img/icon-512-maskable.png',
+    BASE + '/assets/img/favicon-16x16.png',
+    BASE + '/assets/img/favicon-32x32.png',
+    BASE + '/assets/img/apple-touch-icon.png',
+    BASE + '/favicon.ico'
 ];
 
 self.addEventListener('install', event => {

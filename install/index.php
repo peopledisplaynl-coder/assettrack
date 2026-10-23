@@ -1,6 +1,6 @@
 <?php
 /**
- * AssetTrack Installer v4.0
+ * AssetTrack Installer
  * Stap 1: Database verbinding
  * Stap 2: Beheerder account + organisatie
  * Stap 3: Weergave instellingen

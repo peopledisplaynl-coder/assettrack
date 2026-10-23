@@ -67,7 +67,10 @@ $fontSlug = urlencode(preg_replace('/[^a-zA-Z0-9 ]/', '', $themeFont));
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="<?= htmlspecialchars($appName) ?>">
 <link rel="manifest" href="<?= BASE_URL ?>/manifest.json">
-<link rel="apple-touch-icon" href="<?= BASE_URL ?>/assets/img/icon-192.png">
+<link rel="icon" href="<?= BASE_URL ?>/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="<?= BASE_URL ?>/assets/img/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="<?= BASE_URL ?>/assets/img/favicon-16x16.png">
+<link rel="apple-touch-icon" href="<?= BASE_URL ?>/assets/img/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=<?= $fontSlug ?>:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -175,6 +178,10 @@ $fontSlug = urlencode(preg_replace('/[^a-zA-Z0-9 ]/', '', $themeFont));
                 Alle locaties doorzoeken
             </a>
             <?php endif; ?>
+            <a href="<?= BASE_URL ?>/select_location.php" class="loc-dropdown-item" style="border-top:1px solid rgba(255,255,255,0.12);margin-top:2px;text-decoration:none;">
+                <span style="width:20px;text-align:center;">📊</span>
+                Locatie-overzicht
+            </a>
         </div>
     <?php else: ?>
         <span class="location-badge<?= $locationColor ? ' has-color' : '' ?>" style="cursor:default;">

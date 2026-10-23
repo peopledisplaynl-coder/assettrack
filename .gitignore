@@ -1,0 +1,32 @@
+# --- Secrets / per-server configuration (never commit) ---
+includes/config.php
+deploy.config.json
+.env
+
+# --- User uploads (live data, never commit) ---
+assets/uploads/**
+!assets/uploads/asset_images/
+!assets/uploads/asset_images/index.php
+!assets/uploads/user_avatars/
+!assets/uploads/user_avatars/index.php
+
+# --- Tooling / build output ---
+node_modules/
+.deploy-state-*.json
+test-results/
+playwright-report/
+tests/.tmp/
+dist/
+*.zip
+
+# --- Logs / OS / editors ---
+*.log
+error_log
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.tmp
+*.bak
+*.swp

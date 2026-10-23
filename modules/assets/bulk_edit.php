@@ -62,8 +62,27 @@ $filterStatus   = $_GET['filter_status'] ?? '';
 $filterSearch   = trim($_GET['filter_search'] ?? '');
 $locationId     = getLocationId();
 
+// Kolomfilter: filter op één willekeurig veld (standaard óf custom), inclusief
+// "alleen leeg" — dit is wat nodig is om bijv. "alle assets zonder serienummer"
+// te vinden (zie ook de gelijksoortige custom-veld-filter bij Rapporten).
+$filterField      = trim($_GET['filter_field'] ?? '');
+$filterFieldValue = trim($_GET['filter_field_value'] ?? '');
+$filterFieldEmpty = isset($_GET['filter_field_empty']) && $_GET['filter_field_empty'] === '1';
+
+// Preview toonde altijd hooguit 200 resultaten zonder enige aanduiding dat er meer
+// waren en zonder manier om de rest te zien -- standaard nog steeds 200 (snel en
+// overzichtelijk bij een grote database), maar met "Toon alle resultaten" kan de
+// gebruiker desgewenst alles in één keer zien/selecteren.
+$showAllResults = isset($_GET['show_all']) && $_GET['show_all'] === '1';
+$previewLimit   = $showAllResults ? 5000 : 200;
+
 // Bouw filter query
-function buildFilterQuery(string $filterBrand, string $filterType, string $filterRoom, string $filterStatus, string $filterSearch, int $locationId): array {
+// $columnWhitelist: toegestane standaardkolommen voor het kolomfilter (voorkomt SQL-
+// injectie via de kolomnaam, die niet als parameter meegegeven kan worden).
+function buildFilterQuery(
+    string $filterBrand, string $filterType, string $filterRoom, string $filterStatus, string $filterSearch,
+    int $locationId, string $filterField, string $filterFieldValue, bool $filterFieldEmpty, array $columnWhitelist
+): array {
     $where  = [];
     $params = [];
 
@@ -93,6 +112,33 @@ function buildFilterQuery(string $filterBrand, string $filterType, string $filte
         $params   = array_merge($params, [$term, $term, $term]);
     }
 
+    // Kolomfilter
+    if ($filterField !== '' && ($filterFieldEmpty || $filterFieldValue !== '')) {
+        if (strpos($filterField, 'custom_') === 0) {
+            $cfName = substr($filterField, 7);
+            if ($filterFieldEmpty) {
+                $where[] = "a.id NOT IN (SELECT cfv.asset_id FROM custom_field_values cfv
+                            JOIN custom_fields cf ON cf.id = cfv.field_id
+                            WHERE cf.field_name = ? AND cfv.value IS NOT NULL AND cfv.value <> '')";
+                $params[] = $cfName;
+            } else {
+                $where[] = "a.id IN (SELECT cfv.asset_id FROM custom_field_values cfv
+                            JOIN custom_fields cf ON cf.id = cfv.field_id
+                            WHERE cf.field_name = ? AND cfv.value LIKE ?)";
+                $params[] = $cfName;
+                $params[] = '%' . $filterFieldValue . '%';
+            }
+        } elseif (in_array($filterField, $columnWhitelist, true)) {
+            if ($filterFieldEmpty) {
+                $where[] = "(a.$filterField IS NULL OR a.$filterField = '')";
+            } else {
+                $where[] = "a.$filterField LIKE ?";
+                $params[] = '%' . $filterFieldValue . '%';
+            }
+        }
+        // Onbekend/ongeldig veld: filter negeren (net als bij Rapporten)
+    }
+
     $whereClause = $where ? 'WHERE ' . implode(' AND ', $where) : '';
     return [$whereClause, $params];
 }
@@ -109,6 +155,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'bulk_
 
         if (empty($assetIds)) {
             $errors[] = 'Geen assets geselecteerd.';
+        } elseif ($fieldName === 'delete_assets') {
+            // Bulk verwijderen -- zelfde aanpak als op het asset-overzicht: eigen
+            // permissie (delete_assets, los van edit_assets) en afbeeldingen eerst weg.
+            if (!hasPermission('delete_assets')) {
+                $errors[] = 'Geen rechten om assets te verwijderen.';
+            } else {
+                $deletedCount = 0;
+                foreach ($assetIds as $aid) {
+                    $asset = getAssetById($aid);
+                    if ($asset) {
+                        $images = getAssetImages($aid);
+                        foreach ($images as $image) {
+                            deleteAssetImage($image['id'], $aid);
+                        }
+                        deleteAsset($aid);
+                        logAudit('DELETE', 'assets', $aid, $asset, null);
+                        $deletedCount++;
+                    }
+                }
+                $success = "$deletedCount asset(s) verwijderd.";
+            }
         } elseif ($fieldName === 'bulk_image') {
             // Afbeelding bulk upload
             if (!isset($_FILES['bulk_image_file']) || $_FILES['bulk_image_file']['error'] !== UPLOAD_ERR_OK) {
@@ -182,13 +249,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'bulk_
 }
 
 // Preview assets op basis van filter
-$hasFilter = $filterBrand || $filterType || $filterRoom || $filterStatus || $filterSearch;
+$columnWhitelist = array_keys($editableFields);
+$hasFilter = $filterBrand || $filterType || $filterRoom || $filterStatus || $filterSearch
+             || ($filterField !== '' && ($filterFieldEmpty || $filterFieldValue !== ''));
+$previewTotalCount = 0;
 if ($hasFilter) {
-    [$whereClause, $params] = buildFilterQuery($filterBrand, $filterType, $filterRoom, $filterStatus, $filterSearch, $locationId);
-    $preview = query("SELECT a.id, a.asset_number, a.brand, a.model, a.type, a.room, a.status, l.name as location_name
+    [$whereClause, $params] = buildFilterQuery(
+        $filterBrand, $filterType, $filterRoom, $filterStatus, $filterSearch,
+        $locationId, $filterField, $filterFieldValue, $filterFieldEmpty, $columnWhitelist
+    );
+
+    // Totaal aantal treffers (ongeacht de preview-limiet), zodat we kunnen laten zien
+    // of er assets buiten beeld blijven en de gebruiker "Toon alle resultaten" kan
+    // aanbieden i.p.v. stilzwijgend af te kappen bij 200.
+    $countRow = queryOne("SELECT COUNT(*) as cnt FROM assets a $whereClause", $params);
+    $previewTotalCount = (int)($countRow['cnt'] ?? 0);
+
+    $preview = query("SELECT a.id, a.asset_number, a.brand, a.model, a.type, a.room, a.status, a.serial_number, l.name as location_name
                       FROM assets a
                       LEFT JOIN locations l ON a.location_id = l.id
-                      $whereClause ORDER BY a.asset_number LIMIT 200", $params);
+                      $whereClause ORDER BY a.asset_number LIMIT " . (int)$previewLimit, $params);
+
+    // Als er op een custom veld gefilterd wordt, laat de waarde van dat veld ook
+    // zien in de preview -- anders is niet te zien waaróp de resultaten matchen.
+    if ($filterField !== '' && strpos($filterField, 'custom_') === 0 && !empty($preview)) {
+        $cfName = substr($filterField, 7);
+        $cf = queryOne("SELECT id, field_label FROM custom_fields WHERE field_name = ? AND active = 1", [$cfName]);
+        if ($cf) {
+            $previewCustomFieldLabel = $cf['field_label'];
+            foreach ($preview as &$p) {
+                $cfv = queryOne("SELECT value FROM custom_field_values WHERE asset_id = ? AND field_id = ?", [$p['id'], $cf['id']]);
+                $p['filter_field_value'] = $cfv['value'] ?? '';
+            }
+            unset($p);
+        }
+    }
 }
 
 // Laad hulpdata
@@ -274,6 +369,60 @@ include __DIR__ . '/../../templates/header.php';
                 <button type="submit" class="btn btn-primary" style="flex:1;">🔍 Filter toepassen</button>
                 <a href="<?= BASE_URL ?>/modules/assets/bulk_edit.php" class="btn btn-secondary">Reset</a>
             </div>
+
+            <div style="grid-column:1/-1;border-top:1px solid #e5e7eb;margin:6px 0 4px 0;padding-top:14px;">
+                <label style="font-weight:600;color:#1a2332;display:block;margin-bottom:2px;">
+                    Filter op kolom
+                </label>
+                <small style="color:#6b7280;">
+                    Filter op elk willekeurig veld (net als bij Rapporten) — bijvoorbeeld om alle assets
+                    zonder serienummer te vinden: kies "Serienummer" en vink "Alleen leeg" aan.
+                </small>
+            </div>
+            <div class="form-group" style="margin:0;">
+                <label>Veld</label>
+                <select name="filter_field" class="form-control">
+                    <option value="">— geen kolomfilter —</option>
+                    <?php
+                    $fcGroup = '';
+                    foreach ($editableFields as $fname => $finfo):
+                        if ($finfo['group'] !== $fcGroup):
+                            if ($fcGroup) echo '</optgroup>';
+                            $fcGroup = $finfo['group'];
+                            echo '<optgroup label="' . htmlspecialchars($fcGroup) . '">';
+                        endif;
+                    ?>
+                    <option value="<?= $fname ?>" <?= $filterField === $fname ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($finfo['label']) ?>
+                    </option>
+                    <?php endforeach; ?>
+                    </optgroup>
+                    <?php if (!empty($customFields)): ?>
+                    <optgroup label="Custom velden">
+                        <?php foreach ($customFields as $cf): ?>
+                        <option value="custom_<?= htmlspecialchars($cf['field_name']) ?>"
+                            <?= $filterField === 'custom_' . $cf['field_name'] ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($cf['field_label']) ?>
+                        </option>
+                        <?php endforeach; ?>
+                    </optgroup>
+                    <?php endif; ?>
+                </select>
+            </div>
+            <div class="form-group" style="margin:0;">
+                <label>Zoekterm (bevat tekst)</label>
+                <input type="text" name="filter_field_value" id="filterFieldValue" class="form-control"
+                       value="<?= htmlspecialchars($filterFieldValue) ?>"
+                       placeholder="zoekterm..." <?= $filterFieldEmpty ? 'disabled' : '' ?>>
+            </div>
+            <div class="form-group" style="margin:0;display:flex;align-items:flex-end;">
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400;">
+                    <input type="checkbox" name="filter_field_empty" value="1"
+                           id="filterFieldEmpty" onchange="document.getElementById('filterFieldValue').disabled = this.checked;"
+                           <?= $filterFieldEmpty ? 'checked' : '' ?>>
+                    Alleen leeg / niet ingevuld
+                </label>
+            </div>
         </form>
     </div>
 </div>
@@ -290,7 +439,11 @@ include __DIR__ . '/../../templates/header.php';
                 <h3 style="margin:0;color:#1a2332;">
                     Stap 2 — Selecteer assets
                     <span style="font-weight:400;color:#6b7280;font-size:0.9rem;">
-                        (<?= count($preview) ?> gevonden)
+                        <?php if ($previewTotalCount > count($preview)): ?>
+                            (<?= count($preview) ?> van <?= $previewTotalCount ?> getoond)
+                        <?php else: ?>
+                            (<?= count($preview) ?> gevonden)
+                        <?php endif; ?>
                     </span>
                 </h3>
                 <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:500;">
@@ -298,6 +451,24 @@ include __DIR__ . '/../../templates/header.php';
                     Alles selecteren
                 </label>
             </div>
+
+            <?php if ($previewTotalCount > count($preview)): ?>
+                <div class="alert alert-warning" style="margin-bottom:12px;">
+                    Er zijn <strong><?= $previewTotalCount ?></strong> assets die aan dit filter voldoen, maar er
+                    worden er hier maar <strong><?= count($preview) ?></strong> getoond
+                    (en dus ook alleen die geselecteerd/bewerkt als je "Alles selecteren" gebruikt).
+                    <?php
+                    $showAllParams = $_GET;
+                    $showAllParams['show_all'] = '1';
+                    $showAllUrl = '?' . http_build_query($showAllParams);
+                    ?>
+                    <?php if ($previewTotalCount > 5000): ?>
+                        Verfijn het filter verder zodat er minder dan 5000 assets overblijven.
+                    <?php else: ?>
+                        <a href="<?= htmlspecialchars($showAllUrl) ?>">Toon alle <?= $previewTotalCount ?> resultaten</a>.
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
 
             <?php if (empty($preview)): ?>
                 <p style="color:#6b7280;text-align:center;padding:20px;">
@@ -315,7 +486,11 @@ include __DIR__ . '/../../templates/header.php';
                             <th>Soort</th>
                             <th>Ruimte</th>
                             <th>Status</th>
+                            <th>Serienummer</th>
                             <th>Locatie</th>
+                            <?php if (!empty($previewCustomFieldLabel)): ?>
+                            <th><?= htmlspecialchars($previewCustomFieldLabel) ?></th>
+                            <?php endif; ?>
                         </tr>
                     </thead>
                     <tbody>
@@ -337,7 +512,17 @@ include __DIR__ . '/../../templates/header.php';
                                     <?= htmlspecialchars($a['status']) ?>
                                 </span>
                             </td>
+                            <td>
+                                <?php if (empty($a['serial_number'])): ?>
+                                <span style="color:#dc2626;font-style:italic;">leeg</span>
+                                <?php else: ?>
+                                <?= htmlspecialchars($a['serial_number']) ?>
+                                <?php endif; ?>
+                            </td>
                             <td><?= htmlspecialchars($a['location_name'] ?? '') ?></td>
+                            <?php if (!empty($previewCustomFieldLabel)): ?>
+                            <td><?= htmlspecialchars($a['filter_field_value'] ?? '') ?></td>
+                            <?php endif; ?>
                         </tr>
                         <?php endforeach; ?>
                     </tbody>
@@ -355,14 +540,14 @@ include __DIR__ . '/../../templates/header.php';
     <div class="card" style="margin-bottom:20px;">
         <div class="card-body">
             <h3 style="margin-top:0;color:#1a2332;border-bottom:1px solid #e5e7eb;padding-bottom:10px;">
-                Stap 3 — Kies veld en nieuwe waarde
+                Stap 3 — Kies veld/actie en waarde
             </h3>
 
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
                 <div class="form-group">
-                    <label>Veld om te wijzigen</label>
+                    <label>Veld om te wijzigen — of een actie</label>
                     <select name="field_name" id="fieldSelect" class="form-control" onchange="updateValueInput(this.value)">
-                        <option value="">-- Kies een veld --</option>
+                        <option value="">-- Kies een veld of actie --</option>
                         <?php
                         $currentGroup = '';
                         foreach ($editableFields as $fname => $finfo):
@@ -387,6 +572,11 @@ include __DIR__ . '/../../templates/header.php';
                         <optgroup label="Afbeelding">
                             <option value="bulk_image">📷 Afbeelding toevoegen</option>
                         </optgroup>
+                        <?php if (hasPermission('delete_assets')): ?>
+                        <optgroup label="Actie">
+                            <option value="delete_assets">🗑 Assets verwijderen</option>
+                        </optgroup>
+                        <?php endif; ?>
                     </select>
                 </div>
 
@@ -415,10 +605,16 @@ include __DIR__ . '/../../templates/header.php';
                         </span>
                     </label>
                 </div>
+                <div class="form-group" id="deleteWarning" style="display:none;">
+                    <div class="alert alert-danger" style="margin:0;">
+                        Dit verwijdert de geselecteerde assets <strong>definitief</strong>, inclusief hun
+                        foto's. Dit kan niet ongedaan worden gemaakt.
+                    </div>
+                </div>
             </div>
 
             <div style="margin-top:15px;">
-                <button type="submit" class="btn btn-primary"
+                <button type="submit" class="btn btn-primary" id="bulkSubmitBtn"
                         onclick="return confirmBulk()"
                         style="padding:10px 24px;">
                     ✅ Wijziging doorvoeren
@@ -456,22 +652,41 @@ function toggleClear(cb) {
     if (cb.checked) document.getElementById('fieldValue').value = '';
 }
 
-// Toon afbeelding upload veld als bulk_image geselecteerd
+// Toon afbeelding upload veld als bulk_image geselecteerd, of de waarschuwing
+// als "Assets verwijderen" gekozen is
 document.getElementById('fieldSelect').addEventListener('change', function() {
-    const isImage = this.value === 'bulk_image';
+    const isImage  = this.value === 'bulk_image';
+    const isDelete = this.value === 'delete_assets';
     document.getElementById('imageContainer').style.display = isImage ? 'block' : 'none';
-    document.getElementById('valueContainer').style.display = isImage ? 'none' : 'block';
+    document.getElementById('valueContainer').style.display = (isImage || isDelete) ? 'none' : 'block';
+    document.getElementById('deleteWarning').style.display  = isDelete ? 'block' : 'none';
+
+    const btn = document.getElementById('bulkSubmitBtn');
+    if (isDelete) {
+        btn.textContent = '🗑 Assets verwijderen';
+        btn.className = 'btn btn-danger';
+    } else {
+        btn.textContent = '✅ Wijziging doorvoeren';
+        btn.className = 'btn btn-primary';
+    }
 });
 
 function updateValueInput(fieldName) {
     const container = document.getElementById('valueContainer');
     const valueInput = document.getElementById('fieldValue');
-    valueInput.disabled = false;
+    // valueInput kan al vervangen zijn door een dynamische select/textarea (bijv. na
+    // eerder "Status" gekozen te hebben) -- dan bestaat #fieldValue niet meer.
+    if (valueInput) valueInput.disabled = false;
     document.getElementById('clearField').checked = false;
 
     // Verwijder bestaande select/textarea
     const existing = document.getElementById('dynamicInput');
     if (existing) existing.remove();
+
+    // Geen invoerveld nodig voor een afbeelding-upload of de verwijder-actie
+    if (fieldName === 'bulk_image' || fieldName === 'delete_assets') {
+        return;
+    }
 
     if (fieldName === 'status') {
         const sel = document.createElement('select');
@@ -591,8 +806,11 @@ function confirmBulk() {
     }
     const field = document.getElementById('fieldSelect').value;
     if (!field) {
-        alert('Kies een veld om te wijzigen.');
+        alert('Kies een veld of actie.');
         return false;
+    }
+    if (field === 'delete_assets') {
+        return confirm(`Weet je zeker dat je ${selected} asset(s) definitief wilt verwijderen? Dit kan niet ongedaan worden gemaakt.`);
     }
     const clearing = document.getElementById('clearField').checked;
     const msg = clearing

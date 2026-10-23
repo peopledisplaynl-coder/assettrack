@@ -85,8 +85,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Validatie
     if (empty($data['brand']))  $errors[] = 'Merk is verplicht';
     if (empty($data['model']))  $errors[] = 'Model is verplicht';
-    if (!empty($data['mac_address']) && !isValidMAC($data['mac_address']))
-        $errors[] = 'Ongeldig MAC adres (formaat: 00:11:22:33:44:55)';
+    if (!empty($data['mac_address'])) {
+        if (!isValidMAC($data['mac_address'])) {
+            $errors[] = 'Ongeldig MAC adres (bijv. 00:11:22:33:44:55 of 001122334455)';
+        } else {
+            $data['mac_address'] = normalizeMAC($data['mac_address']);
+        }
+    }
     if (!empty($data['lan_ip_address']) && !isValidIP($data['lan_ip_address']))
         $errors[] = 'Ongeldig LAN IP adres';
     if (!empty($data['management_ip']) && !isValidIP($data['management_ip']))

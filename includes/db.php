@@ -4,6 +4,8 @@
  * AssetTrack - IT Asset Management System
  */
 
+require_once __DIR__ . '/version.php';
+
 // Config controleren
 $configFile = __DIR__ . '/config.php';
 if (!file_exists($configFile)) {
@@ -16,12 +18,6 @@ require_once $configFile;
 // BASE_URL fallback
 if (!defined('BASE_URL')) {
     define('BASE_URL', '');
-}
-
-// App-versienummer — één centrale plek. Footer (templates/footer.php) gebruikt
-// dit; bij een versiebump alleen hier aanpassen (en het badge in README.md).
-if (!defined('APP_VERSION')) {
-    define('APP_VERSION', '4.0');
 }
 
 $db = null;
