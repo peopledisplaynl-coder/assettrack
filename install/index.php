@@ -11,7 +11,7 @@ session_start();
 $configFile = __DIR__ . '/../includes/config.php';
 
 // Al geïnstalleerd?
-if (file_exists($configFile) && !isset($_GET['reinstall'])) { ?>
+if (file_exists($configFile)) { ?>
 <!DOCTYPE html>
 <html lang="nl">
 <head>
@@ -32,23 +32,16 @@ if (file_exists($configFile) && !isset($_GET['reinstall'])) { ?>
 <div class="box">
     <div style="font-size:3rem;margin-bottom:16px;">✅</div>
     <h2>AssetTrack is al geïnstalleerd</h2>
-    <p>Er is al een configuratiebestand aanwezig.<br>Wil je opnieuw installeren? De huidige configuratie wordt verwijderd.</p>
-    <a href="index.php?reinstall=1" class="btn btn-danger"
-       onclick="return confirm('Weet je zeker dat je opnieuw wilt installeren? Dit verwijdert de huidige configuratie.')">
-        🔄 Opnieuw installeren
-    </a>
+    <p>Er is al een configuratiebestand aanwezig.<br>
+       Opnieuw installeren kan alleen door eerst <code>includes/config.php</code>
+       via FTP of de bestandsbeheerder te verwijderen. Verwijder daarna ook deze
+       map <code>install/</code> van de server.</p>
     <a href="../index.php" class="btn btn-secondary">← Terug naar login</a>
 </div>
 </body>
 </html>
 <?php exit; }
 
-// Verwijder config bij herinstallatie
-if (isset($_GET['reinstall']) && file_exists($configFile)) {
-    unlink($configFile);
-    header('Location: index.php');
-    exit;
-}
 
 $steps = [
     1 => ['title' => 'Database',    'icon' => '🗄️'],
@@ -171,6 +164,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $currentStep === 3) {
                 }
             }
 
+            // Record all migrations as applied (install.sql already has the full schema;
+            // migrations are idempotent, so this only fills schema_migrations).
+            require_once __DIR__ . '/../includes/migrations.php';
+            try { runMigrations($pdo); }
+            catch (Throwable $e) { $warnings[] = 'Migraties: ' . $e->getMessage(); }
+
             // Organisatie en locatie instellen
             $pdo->prepare("UPDATE organisations SET name = ? WHERE id = 1")->execute([$inst['org_name']]);
             $pdo->prepare("UPDATE locations SET name = ? WHERE id = 1")->execute([$inst['loc_name']]);
@@ -231,6 +230,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $currentStep === 3) {
 
             $success     = true;
             $currentStep = 4;
+
+            // Disable the installer: it must never stay usable on a live server.
+            // Shared hosting does not always allow deleting files, so try both.
+            register_shutdown_function(function () {
+                @unlink(__DIR__ . '/install.sql');
+                if (!@unlink(__FILE__)) {
+                    @rename(__FILE__, __DIR__ . '/index.php.disabled-' . bin2hex(random_bytes(6)));
+                }
+            });
 
         } catch (Exception $e) {
             $errors[] = 'Installatie mislukt: ' . $e->getMessage();

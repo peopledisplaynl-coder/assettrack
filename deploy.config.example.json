@@ -1,0 +1,19 @@
+{
+  "default": "test",
+  "targets": {
+    "test": {
+      "host": "VUL-IN.ssh.w2.strato.hosting",
+      "port": 22,
+      "username": "VUL-IN",
+      "remotePath": "/VUL-IN",
+      "url": "https://VUL-IN"
+    },
+    "productie": {
+      "host": "VUL-IN.ssh.w2.strato.hosting",
+      "port": 22,
+      "username": "VUL-IN",
+      "remotePath": "/mijnict",
+      "url": "https://mijnict.peopledisplay.nl"
+    }
+  }
+}

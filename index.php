@@ -325,6 +325,11 @@ body {
         </div>
         <?php endif; ?>
 
+        <?php if (DEMO_MODE): ?>
+        <div style="background:#fef3c7;border:1px solid #fde68a;color:#92400e;border-radius:8px;padding:10px 12px;margin-bottom:16px;font-size:0.85rem;">
+            Demomodus: log in met <strong>demo</strong> / <strong>demo1234</strong>.
+        </div>
+        <?php endif; ?>
         <form method="POST" novalidate>
             <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
             <div class="form-group">

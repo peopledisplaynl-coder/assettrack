@@ -374,4 +374,9 @@ function dismissIOSBanner() {
 }
 </script>
 
+<?php if (DEMO_MODE): ?>
+<div class="demo-strip" style="background:#fef3c7;color:#92400e;text-align:center;font-size:0.8rem;padding:4px 12px;border-bottom:1px solid #fde68a;">
+    Demomodus — alle gegevens zijn verzonnen voorbeeldgegevens.
+</div>
+<?php endif; ?>
 <main>
