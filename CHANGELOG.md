@@ -4,6 +4,12 @@ Alle noemenswaardige wijzigingen in AssetTrack. Opmaak volgens
 [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/), versies volgens
 [Semantic Versioning](https://semver.org/lang/nl/).
 
+## [4.2.1] - 2026-10-24
+### Beveiliging
+- Deploy-script: het SFTP-wachtwoord werd in Windows PowerShell leesbaar getoond tijdens
+  het intypen. Het wachtwoord wordt nu verborgen ingelezen (elke toets als `*`), en zonder
+  interactieve terminal vraagt het script er niet om (gebruik dan `AT_DEPLOY_PASSWORD`).
+
 ## [4.2.0] - 2026-10-23
 Fundament voor verder bouwen. De werking van de app blijft gelijk.
 

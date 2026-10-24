@@ -1,6 +1,6 @@
 {
   "name": "assettrack",
-  "version": "4.2.0",
+  "version": "4.2.1",
   "private": true,
   "description": "AssetTrack - ICT-inventarisatie voor scholen en kleine organisaties (PHP/MySQL, shared hosting)",
   "license": "MIT",

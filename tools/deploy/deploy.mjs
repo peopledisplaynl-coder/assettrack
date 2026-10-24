@@ -31,7 +31,6 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createInterface } from 'node:readline';
 
 export const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 
@@ -89,11 +88,44 @@ function loadConfig() {
   return JSON.parse(readFileSync(file, 'utf8'));
 }
 
-function askHidden(question) {
-  return new Promise((resolve) => {
-    const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: true });
-    rl._writeToOutput = (s) => { if (s.includes(question)) rl.output.write(s); };
-    rl.question(question, (answer) => { rl.close(); process.stdout.write('\n'); resolve(answer); });
+/**
+ * Ask for a password without showing it. Uses raw keyboard mode, which works the
+ * same in Windows PowerShell/cmd, Windows Terminal and Unix terminals; each key
+ * is shown as "*". Refuses to ask when there is no interactive terminal, so a
+ * password can never end up visible in a log.
+ */
+export function askHidden(question, input = process.stdin, output = process.stdout) {
+  return new Promise((resolve, reject) => {
+    if (!input.isTTY || typeof input.setRawMode !== 'function') {
+      reject(new Error('Geen interactieve terminal: zet het wachtwoord in de omgevingsvariabele AT_DEPLOY_PASSWORD.'));
+      return;
+    }
+    output.write(question);
+    let value = '';
+    input.setRawMode(true);
+    input.resume();
+    input.setEncoding('utf8');
+    const finish = (err) => {
+      input.setRawMode(false);
+      input.pause();
+      input.removeListener('data', onData);
+      output.write('\n');
+      if (err) reject(err); else resolve(value);
+    };
+    const onData = (chunk) => {
+      for (const ch of chunk) {
+        if (ch === '\r' || ch === '\n') return finish();
+        if (ch === '\u0003') return finish(new Error('Afgebroken.'));          // Ctrl+C
+        if (ch === '\u0008' || ch === '\u007f') {                             // Backspace
+          if (value.length) { value = value.slice(0, -1); output.write('\b \b'); }
+          continue;
+        }
+        if (ch < ' ') continue;                                             // other control keys
+        value += ch;
+        output.write('*');
+      }
+    };
+    input.on('data', onData);
   });
 }
 
