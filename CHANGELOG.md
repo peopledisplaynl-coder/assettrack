@@ -4,6 +4,22 @@ Alle noemenswaardige wijzigingen in AssetTrack. Opmaak volgens
 [Keep a Changelog](https://keepachangelog.com/nl/1.1.0/), versies volgens
 [Semantic Versioning](https://semver.org/lang/nl/).
 
+## [4.3.0] - 2026-10-24
+### Toegevoegd
+- Nieuwe Nederlandse gebruikershandleiding (`docs/handleiding/`) met 40 schermafbeeldingen
+  uit de demo-omgeving, als PDF en Word. Opnieuw te maken met `npm run screenshots` en
+  `npm run docs`.
+- Templates: knop **+ Nieuw asset** opent het formulier met de gegevens van het template
+  (kon voorheen alleen via een handmatige URL).
+
+### Opgelost
+- CSV-import: een bestand uit Excel als "CSV UTF-8" (met byte-order mark) gaf de eerste
+  kolom de naam `"Assetnummer"` met aanhalingstekens.
+
+### Gewijzigd
+- Demo-gegevens realistischer: gespreide aankoopdatums, vervangingsdatums, laatste login;
+  de demo-CSV bevat nieuwe serienummers zodat een proefimport slaagt.
+
 ## [4.2.1] - 2026-10-24
 ### Beveiliging
 - Deploy-script: het SFTP-wachtwoord werd in Windows PowerShell leesbaar getoond tijdens

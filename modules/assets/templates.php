@@ -115,6 +115,10 @@ include __DIR__ . '/../../templates/header.php';
                 </span>
                 <div style="display:flex;gap:5px;">
                     <?php if ($t['active']): ?>
+                    <?php if (hasPermission('add_assets')): ?>
+                    <a href="<?= BASE_URL ?>/modules/assets/add.php?template_id=<?= $t['id'] ?>"
+                       class="btn btn-sm btn-secondary" title="Nieuw asset met de gegevens van dit template">+ Nieuw asset</a>
+                    <?php endif; ?>
                     <a href="<?= BASE_URL ?>/modules/assets/template_sync.php?template_id=<?= $t['id'] ?>"
                        class="btn btn-sm btn-primary">▶ Toepassen</a>
                     <a href="?deactivate=<?= $t['id'] ?>"

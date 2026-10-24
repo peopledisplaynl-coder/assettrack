@@ -81,7 +81,8 @@ $hash = password_hash(DemoData::PASSWORD, PASSWORD_DEFAULT);
 $userIds = [];
 foreach (DemoData::USERS as [$username, $name, $role, $email, $locs]) {
     $userIds[$username] = $ins('users', ['full_name' => $name, 'username' => $username, 'email' => $email,
-        'password_hash' => $hash, 'role' => $role, 'active' => 1]);
+        'password_hash' => $hash, 'role' => $role, 'active' => 1,
+        'last_login' => date('Y-m-d H:i:s', time() - (count($userIds) * 86400 * 3 + 3600 * (count($userIds) + 2)))]);
     foreach ($locs ?: array_keys(DemoData::LOCATIONS) as $li) {
         $ins('user_locations', ['user_id' => $userIds[$username], 'location_id' => $locationIds[$li],
             'can_view' => 1, 'can_edit' => $role === 'visitor' ? 0 : 1]);
@@ -105,6 +106,9 @@ foreach ($demo->assets() as $idx => $a) {
         'created_by' => $userIds['demo'], 'registration_date' => ($a['purchase_date'] ?? date('Y-m-d')) . ' 10:00:00'];
     foreach ($columns as $c) {
         if (array_key_exists($c, $a) && $a[$c] !== null) $row[$c] = $a[$c];
+    }
+    if (!empty($a['purchase_date']) && !empty($a['depreciation_years'])) {
+        $row['replacement_due_date'] = date('Y-m-d', strtotime($a['purchase_date'] . ' +' . (int)$a['depreciation_years'] . ' years'));
     }
     $assetIds[$idx] = $ins('assets', $row);
     $brandUse[$a['brand']] = ($brandUse[$a['brand']] ?? 0) + 1;
@@ -145,7 +149,7 @@ $ins('kb_articles', ['category_id' => $kbCats['Netwerk & wifi'], 'title' => 'Gee
 // Some audit history for the dashboard's recent activity.
 $recent = array_slice($assetIds, 0, 8);
 foreach ($recent as $n => $id) {
-    $ins('audit_log', ['user_id' => $n % 2 ? $userIds['r.verbeek'] : $userIds['demo'], 'action' => $n % 3 ? 'UPDATE' : 'CREATE',
+    $ins('audit_log', ['user_id' => $n % 2 ? $userIds['r.verbeek'] : $userIds['demo'], 'action' => $n % 3 ? 'UPDATE' : 'INSERT',
         'table_name' => 'assets', 'record_id' => $id, 'new_values' => json_encode(['status' => 'In gebruik']),
         'ip_address' => '10.20.0.10', 'created_at' => date('Y-m-d H:i:s', time() - $n * 5400)]);
 }

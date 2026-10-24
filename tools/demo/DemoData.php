@@ -125,7 +125,8 @@ final class DemoData
                     ['Lenovo', '300e Chromebook Gen 4', 'MediaTek Kompanio 520', '4GB', 'https://www.lenovo.com'],
                     ['HP', 'Fortis 11 G10 Chromebook', 'Intel N100', '8GB', 'https://www.hp.com'],
                 ]);
-                $purchase = $this->date(6, 60);
+                // Carts were bought at different moments; the oldest is out of warranty.
+                $purchase = $this->date([14, 26, 8, 40][($li + $c) % 4], [16, 28, 10, 42][($li + $c) % 4]);
                 $count = $li === 0 ? 30 : 24;
                 for ($i = 1; $i <= $count; $i++) {
                     $status = $this->rand(1, 100);
@@ -150,7 +151,7 @@ final class DemoData
             // Teacher laptop + touchscreen per group
             foreach ($groupRooms as $room) {
                 $teacher = self::TEACHERS[$teacherIdx++ % count(self::TEACHERS)];
-                $purchase = $this->date(3, 70);
+                $purchase = $this->date(3, 46);
                 $model = $this->pick([
                     ['HP', 'ProBook 440 G9', 'Intel Core i5-1235U', '16GB', 'https://www.hp.com'],
                     ['Dell', 'Latitude 3540', 'Intel Core i5-1335U', '16GB', 'https://www.dell.com'],
@@ -166,7 +167,7 @@ final class DemoData
                     'mac_address' => $this->mac(), 'lan_ip_address' => $ip(10), 'manufacturer_url' => $model[4],
                     '_lease' => $this->rand(0, 1) ? 'Leasecontract ICT-2024-' . $this->rand(10, 99) : null,
                 ];
-                $purchase = $this->date(12, 96);
+                $purchase = $this->date(12, 72);
                 $assets[] = [
                     '_loc' => $li, 'room' => $room, 'brand' => $this->pick(['Prowise', 'Clevertouch', 'Samsung']),
                     'model' => $this->pick(['Touchscreen Ten G2 75"', 'UX Pro 86"', 'Flip Pro 75"']),
@@ -180,7 +181,7 @@ final class DemoData
 
             // Office: desktops with monitors
             foreach (['Directiekamer', 'Administratie', 'Administratie'] as $room) {
-                $purchase = $this->date(8, 84);
+                $purchase = $this->date(8, 56);
                 $desktopIndex = count($assets);
                 $assets[] = [
                     '_loc' => $li, 'room' => $room, 'brand' => 'Dell', 'model' => 'OptiPlex 7010 Micro', 'type' => 'Desktop',
@@ -204,7 +205,7 @@ final class DemoData
 
             // Printers, network, tablets, server
             foreach (['Teamkamer', 'Administratie'] as $room) {
-                $purchase = $this->date(10, 80);
+                $purchase = $this->date(10, 44);
                 $assets[] = [
                     '_loc' => $li, 'room' => $room, 'brand' => $this->pick(['Canon', 'Brother']),
                     'model' => $this->pick(['imageRUNNER C3326i', 'MFC-L8900CDW']), 'type' => 'Printer',
@@ -216,7 +217,7 @@ final class DemoData
             }
             $apRooms = array_slice($rooms, 0, 6);
             foreach ($apRooms as $n => $room) {
-                $purchase = $this->date(20, 50);
+                $purchase = $this->date(8, 30);
                 $assets[] = [
                     '_loc' => $li, 'room' => $room, 'brand' => 'Ubiquiti', 'model' => 'UniFi U6 Pro', 'type' => 'Netwerkapparatuur',
                     'serial_number' => $this->serial('AP'), 'status' => 'In gebruik', 'access_point_number' => sprintf('AP-%02d', $n + 1),
@@ -271,7 +272,8 @@ final class DemoData
         foreach ($this->assets() as $a) {
             if ($a['_loc'] !== 1 || ++$n > $rows) continue;
             $lines[] = implode(';', array_map($q, [
-                sprintf('VB-%04d', $n), $a['brand'], $a['model'], $a['type'], $a['room'], $a['serial_number'] ?? '',
+                sprintf('VB-%04d', $n), $a['brand'], $a['model'], $a['type'], $a['room'],
+                isset($a['serial_number']) ? 'NW' . substr($a['serial_number'], 2) : '',   // new devices: serials not yet in the demo database
                 $a['status'], $a['assigned_to'] ?? '', $fmt($a['purchase_date'] ?? null), $fmt($a['warranty_end_date'] ?? null),
                 $a['depreciation_years'] ?? '', $fmt($a['autoupdate_expiry'] ?? null), $a['operating_system'] ?? '',
                 $a['ram'] ?? '', $a['cpu'] ?? '', str_replace(':', '', $a['mac_address'] ?? ''), $a['lan_ip_address'] ?? '',

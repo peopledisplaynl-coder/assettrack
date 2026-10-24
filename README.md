@@ -7,7 +7,7 @@ AssetTrack is een gratis en open source webapplicatie voor het beheren van IT-ap
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![PHP](https://img.shields.io/badge/PHP-8.x-blue)](https://php.net)
 [![MySQL](https://img.shields.io/badge/MySQL-5.7%2B-orange)](https://mysql.com)
-[![Version](https://img.shields.io/badge/versie-4.2.1-green)](https://github.com/peopledisplaynl-coder/assettrack/releases)
+[![Version](https://img.shields.io/badge/versie-4.3.0-green)](https://github.com/peopledisplaynl-coder/assettrack/releases)
 
 ---
 
@@ -91,6 +91,7 @@ npm run deploy -- productie       # uploadt alleen gewijzigde bestanden via SFTP
 | `npm run test:e2e` | End-to-end tests met Playwright tegen de demo |
 | `npm run package` | ZIP voor een nieuwe installatie |
 | `npm run deploy` | Bijwerken van een server via SFTP |
+| `npm run screenshots` / `npm run docs` | Schermafbeeldingen uit de demo maken / handleiding als PDF en Word bouwen |
 
 Zie `CLAUDE.md` en `docs/ARCHITECTURE.md` voor de opbouw en afspraken.
 
@@ -131,9 +132,13 @@ assettrack/
 
 ---
 
-## 📸 Screenshots
+## 📖 Handleiding
 
-*Screenshots volgen binnenkort*
+De volledige gebruikershandleiding met schermafbeeldingen staat in
+[`docs/handleiding/`](docs/handleiding/): [PDF](docs/handleiding/AssetTrack_Handleiding.pdf) ·
+[Word](docs/handleiding/AssetTrack_Handleiding.docx) · [Markdown](docs/handleiding/handleiding.md).
+
+![Dashboard](docs/handleiding/img/03-dashboard.png)
 
 ---
 

@@ -41,6 +41,8 @@ npm run deploy -- test --dry-run # what would be uploaded
 npm run deploy -- productie      # upload changed files via SFTP (asks for the password)
 npm run deploy -- productie --compare --stale  # compare every file with the server + list leftovers (uploads/deletes nothing)
 php tools/demo/make-csv.php      # regenerate the fictional import CSV
+AT_DEMO_MODE=false tools/dev/stack.sh start && npm run screenshots   # user-guide screenshots
+npm run docs                     # docs/handleiding/handleiding.md -> PDF (Chromium) + Word (pandoc)
 ```
 In the Claude workspace: `apt-get install mariadb-server` if missing; Chromium for
 Playwright is in `/opt/pw-browsers`. Background servers stop after a while — fine once
@@ -68,7 +70,7 @@ tests have run.
 ## Every change
 1. Build it fully (code, migration, demo data, docs). 2. `npm test` and `npm run test:e2e`;
 look at screenshots at phone and desktop width for UI changes. 3. Update the user guide
-when users notice the change. 4. Bump the version in `includes/version.php`, `package.json`,
+(`docs/handleiding/handleiding.md`, screenshots, `npm run docs`) when users notice the change. 4. Bump the version in `includes/version.php`, `package.json`,
 README badge, add a `CHANGELOG.md` entry. 5. Commit as Ton
 (`git -c user.name="Ton" -c user.email="noreply@assettrack.local" commit`).
 6. Deliver the whole project as `assettrack-update-X.Y.Z.zip` (no node_modules, .git,

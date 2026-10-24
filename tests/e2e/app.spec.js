@@ -1,5 +1,8 @@
 import { test, expect } from '@playwright/test';
 import { login, sql } from './helpers.js';
+import { readFileSync } from 'node:fs';
+
+const VERSION = readFileSync('includes/version.php', 'utf8').match(/APP_VERSION',\s*'([^']+)'/)[1];
 
 test.beforeEach(({ page }) => {
   page.on('pageerror', (err) => { throw err; });
@@ -18,7 +21,7 @@ test('superadmin logs in, picks a school and sees the dashboard', async ({ page 
   await login(page);
   await expect(page.locator('.stat-card').first()).toBeVisible();
   await expect(page.getByText('Demomodus — alle gegevens zijn verzonnen')).toBeVisible();
-  await expect(page.locator('footer')).toContainText('4.2.0');
+  await expect(page.locator('footer')).toContainText(VERSION);
 });
 
 test('search finds Chromebooks and opens an asset', async ({ page }) => {
@@ -75,4 +78,21 @@ test('logout ends the session', async ({ page }) => {
   await page.goto('/logout.php');
   await page.goto('/dashboard.php');
   await expect(page).toHaveURL(/index\.php/);
+});
+
+test('templates: "+ Nieuw asset" opens the form pre-filled', async ({ page }) => {
+  await login(page);
+  await page.goto('/modules/assets/templates.php');
+  await page.getByRole('link', { name: '+ Nieuw asset' }).first().click();
+  await expect(page).toHaveURL(/add\.php\?template_id=\d+/);
+  await expect(page.locator('input[name="brand"]')).not.toHaveValue('');
+});
+
+test('import: a CSV with byte-order mark (Excel "CSV UTF-8") shows clean column names', async ({ page }) => {
+  await login(page);
+  await page.goto('/modules/assets/import.php');
+  await page.selectOption('select[name="location_id"]', { label: 'KC Het Vlinderveld' });
+  await page.setInputFiles('input[type="file"]', 'tools/demo/demo_import.csv');
+  await page.locator('main form button[type="submit"]').last().click();
+  await expect(page.locator('select[name="mapping[Assetnummer]"]')).toHaveCount(1);
 });

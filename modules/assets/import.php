@@ -56,6 +56,12 @@ if ($step === 1) {
                             $content = file_get_contents($file['tmp_name']);
                             $delimiter = $_POST['delimiter'] ?? ';';
 
+                            // "CSV UTF-8" from Excel starts with a byte-order mark. Strip it,
+                            // otherwise the first column name shows up as "\"Assetnummer\"".
+                            if (strncmp($content, "\xEF\xBB\xBF", 3) === 0) {
+                                $content = substr($content, 3);
+                            }
+
                             // Excel exporteert CSV's op Windows vaak als Windows-1252/ANSI
                             // i.p.v. UTF-8 (met name als er accenten in voorkomen, bijv.
                             // "Conciërge" of "Geïnstalleerd"). Zonder deze conversie kwamen

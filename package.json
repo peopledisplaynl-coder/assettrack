@@ -1,6 +1,6 @@
 {
   "name": "assettrack",
-  "version": "4.2.1",
+  "version": "4.3.0",
   "private": true,
   "description": "AssetTrack - ICT-inventarisatie voor scholen en kleine organisaties (PHP/MySQL, shared hosting)",
   "license": "MIT",
@@ -19,12 +19,18 @@
     "test": "npm run lint && npm run check:version && npm run test:php",
     "demo": "bash tools/dev/stack.sh start",
     "demo:stop": "bash tools/dev/stack.sh stop",
-    "demo:csv": "php tools/demo/make-csv.php"
+    "demo:csv": "php tools/demo/make-csv.php",
+    "screenshots": "node tools/screenshots/take.mjs",
+    "docs": "bash tools/docs/build.sh"
   },
   "dependencies": {
     "ssh2-sftp-client": "^11.0.0"
   },
   "devDependencies": {
-    "@playwright/test": "1.63.0"
+    "@fontsource/dm-sans": "^5.3.0",
+    "@playwright/test": "1.63.0",
+    "html5-qrcode": "^2.3.8",
+    "jsbarcode": "^3.11.5",
+    "qrcodejs": "^1.0.0"
   }
 }
